@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { supabase } from './lib/supabase';
 import { 
   Calendar, 
   MapPin, 
@@ -101,6 +102,7 @@ export default function App() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'yape'>('yape');
   const [adminTab, setAdminTab] = useState<'brand' | 'event' | 'payment' | 'tickets' | 'events_list' | 'seo'>('events_list');
+  const [isLoading, setIsLoading] = useState(true);
   
   // Events Management State
   const [events, setEvents] = useState(INITIAL_EVENTS);
@@ -151,6 +153,119 @@ export default function App() {
     keywords: "bali, eventos, entradas, festivales, conciertos, uluwatu, música, cultura",
     ogImage: "https://picsum.photos/seed/bali-og/1200/630"
   });
+
+  // SEO Effect
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
+
+  const fetchInitialData = async () => {
+    setIsLoading(true);
+    try {
+      // Fetch Events
+      const { data: eventsData, error: eventsError } = await supabase
+        .from('events')
+        .select('*')
+        .order('id', { ascending: true });
+      
+      if (eventsError) throw eventsError;
+      if (eventsData && eventsData.length > 0) {
+        const formattedEvents = eventsData.map(e => ({
+          ...e,
+          bannerImage: e.banner_image,
+          dateTime: e.date_time,
+          date: e.event_date,
+          isVisible: e.is_visible
+        }));
+        setEvents(formattedEvents);
+        setCurrentEventId(formattedEvents[0].id);
+      }
+
+      // Fetch Ticket Types
+      const { data: ticketsData, error: ticketsError } = await supabase
+        .from('ticket_types')
+        .select('*');
+      
+      if (ticketsError) throw ticketsError;
+      if (ticketsData && ticketsData.length > 0) {
+        setTicketTypes(ticketsData);
+        // Initialize quantities
+        const initialQtys: Record<string, number> = {};
+        ticketsData.forEach(t => initialQtys[t.id] = t.id === 'free' ? 1 : 0);
+        setTicketQuantities(initialQtys);
+      }
+
+      // Fetch Settings
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('site_settings')
+        .select('*');
+      
+      if (settingsError) throw settingsError;
+      if (settingsData) {
+        settingsData.forEach(setting => {
+          if (setting.id === 'brand') setBrandData(setting.data);
+          if (setting.id === 'yape') setYapeData(setting.data);
+          if (setting.id === 'seo') setSeoData(setting.data);
+        });
+      }
+
+    } catch (error) {
+      console.error('Error fetching data from Supabase:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveEvent = async (id: number, updates: any) => {
+    try {
+      const dbUpdates = {
+        title1: updates.title1,
+        title2: updates.title2,
+        event_date: updates.date,
+        venue: updates.venue,
+        price: updates.price,
+        banner_image: updates.bannerImage,
+        badge: updates.badge,
+        date_time: updates.dateTime,
+        artists: updates.artists,
+        category: updates.category,
+        is_visible: updates.isVisible,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('events')
+        .update(dbUpdates)
+        .eq('id', id);
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving event:', error);
+    }
+  };
+
+  const saveSettings = async (type: 'brand' | 'yape' | 'seo', data: any) => {
+    try {
+      const { error } = await supabase
+        .from('site_settings')
+        .upsert({ id: type, data, updated_at: new Date().toISOString() });
+      if (error) throw error;
+    } catch (error) {
+      console.error(`Error saving ${type} settings:`, error);
+    }
+  };
+
+  const saveTicketType = async (id: string, updates: any) => {
+    try {
+      const { error } = await supabase
+        .from('ticket_types')
+        .update(updates)
+        .eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving ticket type:', error);
+    }
+  };
 
   // SEO Effect
   useEffect(() => {
@@ -230,40 +345,75 @@ export default function App() {
   };
 
   const updateField = (field: string, value: string) => {
-    setEvents(prev => prev.map(e => e.id === currentEventId ? { ...e, [field]: value } : e));
+    setEvents(prev => {
+      const newEvents = prev.map(e => e.id === currentEventId ? { ...e, [field]: value } : e);
+      const updatedEvent = newEvents.find(e => e.id === currentEventId);
+      if (updatedEvent) saveEvent(currentEventId, updatedEvent);
+      return newEvents;
+    });
   };
 
-  const handleAddEvent = () => {
-    const newId = Math.max(...events.map(e => e.id)) + 1;
-    const newEvent = {
-      id: newId,
+  const handleAddEvent = async () => {
+    const newEventTemplate = {
       title1: "Nuevo",
       title2: "Evento",
-      date: "01 JAN 2026",
+      event_date: "01 JAN 2026",
       venue: "Lugar del Evento",
       price: 0,
-      bannerImage: "https://picsum.photos/seed/new-event/1200/800",
+      banner_image: "https://picsum.photos/seed/new-event/1200/800",
       badge: "Próximamente",
-      dateTime: "Sáb 1 Enero | 08:00 PM",
+      date_time: "Sáb 1 Enero | 08:00 PM",
       artists: "Artistas por confirmar",
       category: "General",
-      isVisible: true
+      is_visible: true
     };
-    setEvents([...events, newEvent]);
-    setCurrentEventId(newId);
-    setAdminTab('event');
+
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .insert([newEventTemplate])
+        .select();
+
+      if (error) throw error;
+      if (data) {
+        const createdEvent = {
+          ...data[0],
+          bannerImage: data[0].banner_image,
+          dateTime: data[0].date_time,
+          date: data[0].event_date,
+          isVisible: data[0].is_visible
+        };
+        setEvents([...events, createdEvent]);
+        setCurrentEventId(createdEvent.id);
+        setAdminTab('event');
+      }
+    } catch (error) {
+      console.error('Error creating event:', error);
+    }
   };
 
   const handleToggleVisibility = (id: number) => {
-    setEvents(prev => prev.map(e => e.id === id ? { ...e, isVisible: !e.isVisible } : e));
+    setEvents(prev => {
+      const newEvents = prev.map(e => e.id === id ? { ...e, isVisible: !e.isVisible } : e);
+      const updatedEvent = newEvents.find(e => e.id === id);
+      if (updatedEvent) saveEvent(id, updatedEvent);
+      return newEvents;
+    });
   };
 
-  const handleDeleteEvent = (id: number) => {
+  const handleDeleteEvent = async (id: number) => {
     if (events.length <= 1) return;
-    const newEvents = events.filter(e => e.id !== id);
-    setEvents(newEvents);
-    if (currentEventId === id) {
-      setCurrentEventId(newEvents[0].id);
+    try {
+      const { error } = await supabase.from('events').delete().eq('id', id);
+      if (error) throw error;
+      
+      const newEvents = events.filter(e => e.id !== id);
+      setEvents(newEvents);
+      if (currentEventId === id) {
+        setCurrentEventId(newEvents[0].id);
+      }
+    } catch (error) {
+      console.error('Error deleting event:', error);
     }
   };
 
@@ -275,19 +425,64 @@ export default function App() {
   };
 
   const updateTicketType = (id: string, field: string, value: string | number) => {
-    setTicketTypes(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+    setTicketTypes(prev => {
+      const next = prev.map(t => t.id === id ? { ...t, [field]: value } : t);
+      const updated = next.find(t => t.id === id);
+      if (updated) saveTicketType(id, updated);
+      return next;
+    });
   };
 
   const updateBrand = (field: string, value: string | boolean) => {
-    setBrandData(prev => ({ ...prev, [field]: value }));
+    const newData = { ...brandData, [field]: value };
+    setBrandData(newData);
+    saveSettings('brand', newData);
   };
 
   const updateYape = (field: string, value: string) => {
-    setYapeData(prev => ({ ...prev, [field]: value }));
+    const newData = { ...yapeData, [field]: value };
+    setYapeData(newData);
+    saveSettings('yape', newData);
   };
 
   const updateSeo = (field: string, value: string) => {
-    setSeoData(prev => ({ ...prev, [field]: value }));
+    const newData = { ...seoData, [field]: value };
+    setSeoData(newData);
+    saveSettings('seo', newData);
+  };
+
+  const handlePurchase = async () => {
+    try {
+      const purchaseData = {
+        event_id: currentEventId,
+        customer_name: "Cliente Web", // Sería ideal pedir estos datos en un paso previo
+        customer_email: "cliente@ bali.com",
+        tickets: Object.entries(ticketQuantities)
+          .filter(([_, qty]) => (qty as number) > 0)
+          .map(([id, qty]) => ({ id, qty, name: ticketTypes.find(t => t.id === id)?.name })),
+        total_price: totalPrice,
+        payment_method: paymentMethod,
+        payment_status: paymentMethod === 'yape' ? 'pending' : 'completed'
+      };
+
+      const { data, error } = await supabase
+        .from('orders')
+        .insert([purchaseData])
+        .select();
+
+      if (error) throw error;
+      
+      alert(paymentMethod === 'yape' ? "¡Pedido registrado! Envía la captura de tu Yape para confirmar." : "¡Compra exitosa! Revisa tu correo para tus entradas.");
+      setIsPaymentModalOpen(false);
+      // Reset quantities
+      const resetQtys: Record<string, number> = {};
+      ticketTypes.forEach(t => resetQtys[t.id] = 0);
+      setTicketQuantities(resetQtys);
+      
+    } catch (error) {
+      console.error('Error processing purchase:', error);
+      alert("Hubo un error al procesar tu compra. Por favor intenta de nuevo.");
+    }
   };
 
   const totalTickets = Object.values(ticketQuantities).reduce((a: number, b: number) => a + b, 0);
@@ -296,6 +491,15 @@ export default function App() {
     const quantity = qty as number;
     return acc + (ticket ? ticket.price * quantity : 0);
   }, 0);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
+        <div className="w-16 h-16 border-4 border-accent/20 border-t-accent rounded-full animate-spin" />
+        <div className="text-accent text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">Cargando Bali Premium...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -1162,6 +1366,7 @@ export default function App() {
                         </div>
                       </div>
                       <button 
+                        onClick={handlePurchase}
                         className="w-full bg-accent text-black py-5 rounded-2xl font-black text-[13px] uppercase tracking-[0.2em] mt-4 shadow-[0_15px_30px_rgba(212,175,55,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all"
                       >
                         Pagar S/ {totalPrice.toFixed(2)}
@@ -1197,8 +1402,7 @@ export default function App() {
                       </div>
                       <button 
                         onClick={() => {
-                          alert("Enviando comprobante...");
-                          setIsPaymentModalOpen(false);
+                          handlePurchase();
                         }}
                         className="w-full bg-[#742284] text-white py-5 rounded-2xl font-black text-[13px] uppercase tracking-[0.2em] mt-4 hover:bg-[#8e29a1] transition-all"
                       >
