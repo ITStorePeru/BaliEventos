@@ -1,0 +1,1370 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Calendar, 
+  MapPin, 
+  Ticket, 
+  Search, 
+  Menu, 
+  X, 
+  ChevronRight, 
+  ChevronLeft,
+  ArrowRight,
+  User,
+  Star,
+  Settings,
+  Image as ImageIcon,
+  Check,
+  Edit2,
+  Plus,
+  Minus,
+  CreditCard,
+  Wallet,
+  Eye,
+  EyeOff,
+  Globe
+} from 'lucide-react';
+
+// Recipes and Design from SKILL.md
+// This app uses Recipe 4: Dark Luxury / Travel + Recipe 12: Luxury / Prestige
+
+// Updated Featured Events data with user provided events
+const INITIAL_EVENTS = [
+  {
+    id: 1,
+    title1: "Neo Classic",
+    title2: "Night",
+    date: "18 OCT 2026",
+    venue: "Opera de Bali",
+    price: 65,
+    bannerImage: "https://picsum.photos/seed/opera/1200/800",
+    badge: "Exclusive",
+    dateTime: "Dom 18 Octubre | 07:00 PM - 11:00 PM",
+    artists: "Symphonic Orchestra",
+    category: "Classic",
+    isVisible: true
+  },
+  {
+    id: 2,
+    title1: "Underground",
+    title2: "Series",
+    date: "22 OCT 2026",
+    venue: "The Vault Club",
+    price: 40,
+    bannerImage: "https://picsum.photos/seed/vault/1200/800",
+    badge: "Underground",
+    dateTime: "Jue 22 Octubre | 11:00 PM - 05:00 AM",
+    artists: "Experimental DJs",
+    category: "Electronic",
+    isVisible: true
+  },
+  {
+    id: 3,
+    title1: "Jazz on",
+    title2: "the Beach",
+    date: "05 NOV 2026",
+    venue: "Blue Lagoon",
+    price: 55,
+    bannerImage: "https://picsum.photos/seed/jazz/1200/800",
+    badge: "Live Music",
+    dateTime: "Jue 05 Noviembre | 06:00 PM - 10:00 PM",
+    artists: "The Jazz Quartet",
+    category: "Jazz",
+    isVisible: true
+  },
+  {
+    id: 4,
+    title1: "Winter",
+    title2: "Gala 2026",
+    date: "12 NOV 2026",
+    venue: "Palacio Real",
+    price: 150,
+    bannerImage: "https://picsum.photos/seed/palace/1200/800",
+    badge: "Luxury",
+    dateTime: "Jue 12 Noviembre | 08:00 PM - 02:00 AM",
+    artists: "Various Artists",
+    category: "Gala",
+    isVisible: true
+  }
+];
+
+export default function App() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'yape'>('yape');
+  const [adminTab, setAdminTab] = useState<'brand' | 'event' | 'payment' | 'tickets' | 'events_list' | 'seo'>('events_list');
+  
+  // Events Management State
+  const [events, setEvents] = useState(INITIAL_EVENTS);
+  const [currentEventId, setCurrentEventId] = useState<number>(1); 
+  const [editingEventId, setEditingEventId] = useState<number | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string>('Todos');
+  const sliderRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollSlider = (direction: 'left' | 'right') => {
+    if (sliderRef.current) {
+      const scrollAmount = sliderRef.current.offsetWidth * 0.8;
+      sliderRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const categories = ['Todos', ...Array.from(new Set(events.map(e => e.category)))];
+  const filteredEvents = activeCategory === 'Todos' 
+    ? events.filter(e => e.isVisible) 
+    : events.filter(e => e.isVisible && e.category === activeCategory);
+
+  const eventData = events.find(e => e.id === currentEventId) || events[0];
+
+  // Ticket States
+  const [ticketTypes, setTicketTypes] = useState([
+    { id: 'free', name: 'FREEPASS', desc: 'Acceso básico', price: 0 },
+    { id: 'super-vip', name: 'SUPER VIP', desc: 'Acceso premium exclusivo', price: 70 },
+    { id: 'vip', name: 'VIP', desc: 'Acceso preferencial', price: 50 }
+  ]);
+
+  const [brandData, setBrandData] = useState({
+    name: "Bali",
+    logoUrl: "",
+    useLogo: false
+  });
+
+  const [yapeData, setYapeData] = useState({
+    number: "999 000 111",
+    holder: "BALI EVENTOS SAC",
+    qrUrl: ""
+  });
+
+  const [seoData, setSeoData] = useState({
+    title: "Bali - Eventos y Entradas",
+    description: "La plataforma líder en eventos culturales y de entretenimiento en Bali. Compra tus entradas para los mejores festivales, conciertos y rituales.",
+    keywords: "bali, eventos, entradas, festivales, conciertos, uluwatu, música, cultura",
+    ogImage: "https://picsum.photos/seed/bali-og/1200/630"
+  });
+
+  // SEO Effect
+  useEffect(() => {
+    document.title = seoData.title;
+    
+    // Meta Description
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (!metaDesc) {
+      metaDesc = document.createElement('meta');
+      metaDesc.setAttribute('name', 'description');
+      document.head.appendChild(metaDesc);
+    }
+    metaDesc.setAttribute('content', seoData.description);
+
+    // Meta Keywords
+    let metaKey = document.querySelector('meta[name="keywords"]');
+    if (!metaKey) {
+      metaKey = document.createElement('meta');
+      metaKey.setAttribute('name', 'keywords');
+      document.head.appendChild(metaKey);
+    }
+    metaKey.setAttribute('content', seoData.keywords);
+
+    // OG Tags
+    const ogTags = [
+      { property: 'og:title', content: seoData.title },
+      { property: 'og:description', content: seoData.description },
+      { property: 'og:image', content: seoData.ogImage },
+      { property: 'og:type', content: 'website' }
+    ];
+
+    ogTags.forEach(tag => {
+      let element = document.querySelector(`meta[property="${tag.property}"]`);
+      if (!element) {
+        element = document.createElement('meta');
+        element.setAttribute('property', tag.property);
+        document.head.appendChild(element);
+      }
+      element.setAttribute('content', tag.content);
+    });
+  }, [seoData]);
+
+  const [ticketQuantities, setTicketQuantities] = useState<Record<string, number>>({
+    'free': 1,
+    'super-vip': 0,
+    'vip': 0
+  });
+
+  // Login Form State
+  const [loginForm, setLoginForm] = useState({ user: '', pass: '' });
+  const [loginError, setLoginError] = useState(false);
+
+  const handleAdminToggle = () => {
+    if (!isAuthenticated) {
+      setIsLoginModalOpen(true);
+    } else {
+      setIsAdminMode(!isAdminMode);
+    }
+  };
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginForm.user === 'Julio' && loginForm.pass === 'Vilca') {
+      setIsAuthenticated(true);
+      setIsAdminMode(true);
+      setIsLoginModalOpen(false);
+      setLoginError(false);
+    } else {
+      setLoginError(true);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setIsAdminMode(false);
+    setLoginForm({ user: '', pass: '' });
+  };
+
+  const updateField = (field: string, value: string) => {
+    setEvents(prev => prev.map(e => e.id === currentEventId ? { ...e, [field]: value } : e));
+  };
+
+  const handleAddEvent = () => {
+    const newId = Math.max(...events.map(e => e.id)) + 1;
+    const newEvent = {
+      id: newId,
+      title1: "Nuevo",
+      title2: "Evento",
+      date: "01 JAN 2026",
+      venue: "Lugar del Evento",
+      price: 0,
+      bannerImage: "https://picsum.photos/seed/new-event/1200/800",
+      badge: "Próximamente",
+      dateTime: "Sáb 1 Enero | 08:00 PM",
+      artists: "Artistas por confirmar",
+      category: "General",
+      isVisible: true
+    };
+    setEvents([...events, newEvent]);
+    setCurrentEventId(newId);
+    setAdminTab('event');
+  };
+
+  const handleToggleVisibility = (id: number) => {
+    setEvents(prev => prev.map(e => e.id === id ? { ...e, isVisible: !e.isVisible } : e));
+  };
+
+  const handleDeleteEvent = (id: number) => {
+    if (events.length <= 1) return;
+    const newEvents = events.filter(e => e.id !== id);
+    setEvents(newEvents);
+    if (currentEventId === id) {
+      setCurrentEventId(newEvents[0].id);
+    }
+  };
+
+  const updateQuantity = (id: string, delta: number) => {
+    setTicketQuantities(prev => ({
+      ...prev,
+      [id]: Math.max(0, prev[id] + delta)
+    }));
+  };
+
+  const updateTicketType = (id: string, field: string, value: string | number) => {
+    setTicketTypes(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+  };
+
+  const updateBrand = (field: string, value: string | boolean) => {
+    setBrandData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const updateYape = (field: string, value: string) => {
+    setYapeData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const updateSeo = (field: string, value: string) => {
+    setSeoData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const totalTickets = Object.values(ticketQuantities).reduce((a: number, b: number) => a + b, 0);
+  const totalPrice = Object.entries(ticketQuantities).reduce((acc: number, [id, qty]) => {
+    const ticket = ticketTypes.find(t => t.id === id);
+    const quantity = qty as number;
+    return acc + (ticket ? ticket.price * quantity : 0);
+  }, 0);
+
+  return (
+    <div className="min-h-screen bg-transparent">
+      {/* Navigation - Immersive Style */}
+      <nav className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/40 backdrop-blur-xl">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-10 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {brandData.useLogo && brandData.logoUrl ? (
+              <img 
+                src={brandData.logoUrl} 
+                alt={brandData.name} 
+                className="h-10 w-auto object-contain"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span className={`text-2xl font-black tracking-[0.2em] uppercase text-accent ${isAdminMode ? 'cursor-text hover:bg-white/5 px-2 rounded' : ''}`}>
+                {brandData.name}
+              </span>
+            )}
+          </div>
+
+          <div className="hidden md:flex items-center gap-8 text-[12px] font-semibold uppercase tracking-widest text-white/60">
+            <a href="#" className="text-white border-b-2 border-accent pb-1">Explorar</a>
+            <a href="#" className="hover:text-white transition-colors">Festivales</a>
+            <a href="#" className="hover:text-white transition-colors">Conciertos</a>
+            <a href="#" className="hover:text-white transition-colors">Mis Entradas</a>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="hidden sm:flex items-center gap-3 text-[12px] opacity-80 uppercase tracking-widest">
+              {isAuthenticated && (
+                <button 
+                  onClick={handleLogout}
+                  className="text-[10px] font-bold text-white/40 hover:text-white transition-colors border-r border-white/10 pr-3"
+                >
+                  Salir
+                </button>
+              )}
+              <button 
+                onClick={handleAdminToggle}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all ${
+                  isAdminMode 
+                  ? 'bg-accent text-black border-accent font-bold shadow-[0_0_15px_rgba(212,175,55,0.3)]' 
+                  : 'bg-white/5 border-white/10 hover:bg-white/10'
+                }`}
+              >
+                <Settings size={12} className={isAdminMode ? 'animate-spin-slow' : ''} />
+                {isAdminMode ? 'Personalizando' : 'Acceso'}
+              </button>
+            </div>
+            <button 
+              onClick={() => setIsMenuOpen(true)}
+              className="md:hidden text-white"
+            >
+              <Menu size={24} />
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-[1400px] mx-auto px-6 lg:px-10 pt-28 md:pt-32 pb-20">
+        {/* Admin Panel Overlay */}
+        <AnimatePresence>
+          {isAdminMode && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-8 overflow-hidden bg-white/5 border border-white/10 rounded-[20px] p-6 backdrop-blur-md"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-accent/20 flex items-center justify-center text-accent">
+                    <Settings size={20} className="animate-spin-slow" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold tracking-tight text-white focus:outline-none">Panel de Administración</h3>
+                    <p className="text-[10px] text-white/40 uppercase tracking-[0.15em] font-black">Gestiona tu marca, pagos y detalles del evento</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsAdminMode(false)}
+                  className="px-6 py-2 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2 group"
+                >
+                  Cerrar Editor
+                </button>
+              </div>
+
+              <div className="flex flex-col md:flex-row gap-8 bg-black/20 rounded-[24px] border border-white/5 p-2 overflow-hidden">
+                {/* Admin Sidebar Navigation */}
+                <div className="w-full md:w-64 flex flex-row md:flex-col gap-1 p-2 border-b md:border-b-0 md:border-r border-white/5">
+                  {[
+                    { id: 'events_list', label: 'Gestión Eventos', icon: Calendar },
+                    { id: 'event', label: 'Editor Detalle', icon: ImageIcon },
+                    { id: 'brand', label: 'Identidad', icon: Star },
+                    { id: 'payment', label: 'Pagos / Yape', icon: Wallet },
+                    { id: 'tickets', label: 'Entradas', icon: Ticket },
+                    { id: 'seo', label: 'SEO / Meta', icon: Globe },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setAdminTab(tab.id as any)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all ${
+                        adminTab === tab.id 
+                        ? 'bg-accent text-black shadow-[0_10px_20px_rgba(212,175,55,0.2)]' 
+                        : 'text-white/40 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <tab.icon size={14} />
+                      <span className="hidden sm:inline">{tab.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Admin Tab Content */}
+                <div className="flex-1 p-6">
+                  {adminTab === 'events_list' && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-4 bg-accent rounded-full" />
+                          <span className="text-[10px] font-black text-white uppercase tracking-widest">Listado de Eventos Próximos</span>
+                        </div>
+                        <button 
+                          onClick={handleAddEvent}
+                          className="flex items-center gap-2 bg-accent text-black px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-accent-dark transition-all"
+                        >
+                          <Plus size={14} />
+                          Nuevo Evento
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
+                        {events.map((event) => (
+                          <div 
+                            key={event.id}
+                            className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                              currentEventId === event.id 
+                              ? 'bg-accent/10 border-accent/30' 
+                              : 'bg-white/5 border-white/5 hover:bg-white/10'
+                            }`}
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 rounded-xl overflow-hidden bg-black/40">
+                                <img src={event.bannerImage} alt="" className="w-full h-full object-cover" />
+                              </div>
+                              <div>
+                                <h4 className={`text-[12px] font-bold ${event.isVisible ? 'text-white' : 'text-white/20 line-through'}`}>{event.title1} {event.title2}</h4>
+                                <p className="text-[9px] text-white/40 uppercase tracking-widest font-black">{event.venue} • {event.date}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => handleToggleVisibility(event.id)}
+                                className={`p-2 rounded-lg transition-all ${event.isVisible ? 'bg-accent/20 text-accent' : 'bg-white/5 text-white/40'}`}
+                                title={event.isVisible ? 'Ocultar evento de la web' : 'Mostrar evento en la web'}
+                              >
+                                {event.isVisible ? <Eye size={14} /> : <EyeOff size={14} />}
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setCurrentEventId(event.id);
+                                  setAdminTab('event');
+                                }}
+                                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all"
+                                title="Editar detalles"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteEvent(event.id)}
+                                className="p-2 rounded-lg bg-white/5 hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-all"
+                                title="Eliminar evento"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                  {adminTab === 'brand' && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-1.5 h-4 bg-accent rounded-full" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Identidad Visual</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="group">
+                          <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-accent transition-colors">Nombre de Marca</label>
+                          <input 
+                            type="text" 
+                            value={brandData.name}
+                            onChange={(e) => updateBrand('name', e.target.value)}
+                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all"
+                            placeholder="Nombre de tu empresa"
+                          />
+                        </div>
+                        
+                        <div>
+                          <div className="flex items-center justify-between mb-2 px-1">
+                            <label className="text-[9px] text-white/30 uppercase font-bold group-focus-within:text-accent transition-colors">Logo (URL)</label>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[8px] text-white/20 font-bold uppercase py-0.5 px-2 bg-white/5 rounded border border-white/5">Ref: 400x160px</span>
+                              <button 
+                                onClick={() => updateBrand('useLogo', !brandData.useLogo)}
+                                className={`text-[9px] font-bold px-3 py-1.5 rounded-md transition-all uppercase tracking-tighter ${
+                                  brandData.useLogo ? 'bg-accent text-black font-black' : 'bg-white/5 text-white/40'
+                                }`}
+                              >
+                                {brandData.useLogo ? 'Imagen Activa' : 'Usar Texto'}
+                              </button>
+                            </div>
+                          </div>
+                          <input 
+                            type="text" 
+                            value={brandData.logoUrl}
+                            onChange={(e) => updateBrand('logoUrl', e.target.value)}
+                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all placeholder:text-white/10"
+                            placeholder="https://tu-logo.com/imagen.png"
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {adminTab === 'event' && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-1.5 h-4 bg-accent rounded-full" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Configuración del Evento</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex justify-between items-center ml-1">
+                            <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">URL del Banner</label>
+                            <span className="text-[8px] text-white/20 font-bold py-0.5 px-2 bg-white/5 rounded border border-white/5">Ref: 1200x800px</span>
+                          </div>
+                          <input 
+                            type="text" 
+                            value={eventData.bannerImage}
+                            onChange={(e) => updateField('bannerImage', e.target.value)}
+                            className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Etiqueta</label>
+                          <input 
+                            type="text" 
+                            value={eventData.badge}
+                            onChange={(e) => updateField('badge', e.target.value)}
+                            className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Lugar</label>
+                          <input 
+                            type="text" 
+                            value={eventData.venue}
+                            onChange={(e) => updateField('venue', e.target.value)}
+                            className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Fecha Corta</label>
+                          <input 
+                            type="text" 
+                            value={eventData.date}
+                            onChange={(e) => updateField('date', e.target.value)}
+                            className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                            placeholder="Ej: 24 MAY 2026"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Categoría</label>
+                          <input 
+                            type="text" 
+                            value={eventData.category}
+                            onChange={(e) => updateField('category', e.target.value)}
+                            className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Precio Sugerido (S/)</label>
+                          <input 
+                            type="number" 
+                            value={eventData.price}
+                            onChange={(e) => setEvents(prev => prev.map(ev => ev.id === currentEventId ? { ...ev, price: parseFloat(e.target.value) || 0 } : ev))}
+                            className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2 md:col-span-2">
+                          <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Título del Evento</label>
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" 
+                              value={eventData.title1}
+                              onChange={(e) => updateField('title1', e.target.value)}
+                              className="flex-1 bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                            />
+                            <input 
+                              type="text" 
+                              value={eventData.title2}
+                              onChange={(e) => updateField('title2', e.target.value)}
+                              className="flex-1 bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent font-bold outline-none transition-all"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2 lg:col-span-3">
+                          <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Fecha, Hora y Lineup</label>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input 
+                              type="text" 
+                              value={eventData.dateTime}
+                              onChange={(e) => updateField('dateTime', e.target.value)}
+                              className="flex-1 bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                            />
+                            <input 
+                              type="text" 
+                              value={eventData.artists}
+                              onChange={(e) => updateField('artists', e.target.value)}
+                              className="flex-[1.5] bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {adminTab === 'payment' && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-1.5 h-4 bg-[#742284] rounded-full" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Configuración de Pagos</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="group">
+                          <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-[#742284] transition-colors">Número Yape</label>
+                          <input 
+                            type="text" 
+                            value={yapeData.number}
+                            onChange={(e) => updateYape('number', e.target.value)}
+                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-[#742284]/40 outline-none transition-all"
+                          />
+                        </div>
+                        <div className="group">
+                          <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-[#742284] transition-colors">Titular de Cuenta</label>
+                          <input 
+                            type="text" 
+                            value={yapeData.holder}
+                            onChange={(e) => updateYape('holder', e.target.value)}
+                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-[#742284]/40 outline-none transition-all"
+                          />
+                        </div>
+                        <div className="group md:col-span-2">
+                          <div className="flex justify-between items-center ml-1 mb-2">
+                            <label className="text-[9px] text-white/30 uppercase font-bold group-focus-within:text-[#742284] transition-colors">URL Imagen QR</label>
+                            <span className="text-[8px] text-white/20 font-bold py-0.5 px-2 bg-white/5 rounded border border-white/5">Ref: 500x500px (1:1)</span>
+                          </div>
+                          <input 
+                            type="text" 
+                            value={yapeData.qrUrl}
+                            onChange={(e) => updateYape('qrUrl', e.target.value)}
+                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-[#742284]/40 outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {adminTab === 'tickets' && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-1.5 h-4 bg-accent rounded-full" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Gestión de Entradas</span>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        {ticketTypes.map((ticket) => (
+                          <div key={ticket.id} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_120px] gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+                            <input 
+                              type="text" 
+                              value={ticket.name}
+                              onChange={(e) => updateTicketType(ticket.id, 'name', e.target.value)}
+                              className="bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-[11px] font-bold text-accent uppercase outline-none focus:border-accent"
+                            />
+                            <input 
+                              type="text" 
+                              value={ticket.desc}
+                              onChange={(e) => updateTicketType(ticket.id, 'desc', e.target.value)}
+                              className="bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-[11px] text-white/60 outline-none focus:border-accent"
+                            />
+                            <div className="flex items-center gap-2 px-2 bg-black/20 rounded-xl border border-white/10">
+                              <span className="text-[9px] font-bold text-white/20">S/</span>
+                              <input 
+                                type="number" 
+                                value={ticket.price}
+                                onChange={(e) => updateTicketType(ticket.id, 'price', parseFloat(e.target.value) || 0)}
+                                className="w-full bg-transparent text-[11px] font-bold text-white outline-none"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {adminTab === 'seo' && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-1.5 h-4 bg-accent rounded-full" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Configuración SEO y Metadatos</span>
+                      </div>
+                      
+                      <div className="space-y-6">
+                        <div className="group">
+                          <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-accent transition-colors">Título del Sitio (Meta Title)</label>
+                          <input 
+                            type="text" 
+                            value={seoData.title}
+                            onChange={(e) => updateSeo('title', e.target.value)}
+                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all"
+                            placeholder="Nombre de tu marca - Descriptivo"
+                          />
+                        </div>
+
+                        <div className="group">
+                          <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-accent transition-colors">Descripción Corta (Meta Description)</label>
+                          <textarea 
+                            value={seoData.description}
+                            onChange={(e) => updateSeo('description', e.target.value)}
+                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all min-h-[100px] resize-none"
+                            placeholder="Resume lo que ofrece tu sitio para los buscadores..."
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="group">
+                            <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-accent transition-colors">Palabras Clave (Keywords)</label>
+                            <input 
+                              type="text" 
+                              value={seoData.keywords}
+                              onChange={(e) => updateSeo('keywords', e.target.value)}
+                              className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all"
+                              placeholder="separadas por comas..."
+                            />
+                          </div>
+                          <div className="group">
+                            <div className="flex justify-between items-center ml-1 mb-2">
+                              <label className="text-[9px] text-white/30 uppercase font-bold group-focus-within:text-accent transition-colors">Imagen Compartir (OG Image URL)</label>
+                              <span className="text-[8px] text-white/20 font-bold py-0.5 px-2 bg-white/5 rounded border border-white/5">Ref: 1200x630px</span>
+                            </div>
+                            <input 
+                              type="text" 
+                              value={seoData.ogImage}
+                              onChange={(e) => updateSeo('ogImage', e.target.value)}
+                              className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all"
+                              placeholder="URL de la imagen para redes sociales"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                          <h4 className="text-[10px] font-bold text-accent uppercase tracking-widest mb-3 flex items-center gap-2">
+                             <Search size={12} />
+                             Vista Previa Google
+                          </h4>
+                          <div className="space-y-1">
+                            <div className="text-[#8ab4f8] text-lg hover:underline cursor-pointer truncate">{seoData.title}</div>
+                            <div className="text-[#34a853] text-[13px]">{window.location.origin}</div>
+                            <div className="text-white/60 text-[13px] line-clamp-2">{seoData.description}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-6 border-t border-white/5 mt-6">
+                <button 
+                  onClick={() => {
+                    const original = INITIAL_EVENTS.find(e => e.id === currentEventId);
+                    if (original) {
+                      setEvents(prev => prev.map(e => e.id === currentEventId ? { ...original } : e));
+                    }
+                  }}
+                  className="text-[10px] uppercase tracking-widest font-bold text-white/40 hover:text-white transition-colors"
+                >
+                  Restaurar Evento Original
+                </button>
+                <div className="text-[10px] text-accent uppercase tracking-widest font-black animate-pulse">
+                  Los cambios se aplican en tiempo real
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6 lg:gap-10 min-h-fit lg:min-h-[600px]">
+          {/* Featured Card */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="group relative rounded-[32px] bg-[#111] overflow-hidden shadow-2xl border border-white/5 p-8 md:p-12 lg:p-16 flex flex-col justify-end min-h-[450px] md:min-h-[550px] lg:min-h-full"
+          >
+            <div className="absolute inset-0 z-0">
+              <img 
+                src={eventData.bannerImage} 
+                alt={eventData.title2} 
+                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+            </div>
+
+            <div className="relative z-10">
+              {isAdminMode && (
+                <motion.div 
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex items-center gap-2 mb-4 bg-accent/20 border border-accent/30 px-3 py-1 rounded-[4px] w-fit"
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-tighter text-accent">Modo Edición Activado</span>
+                </motion.div>
+              )}
+              <span className="bg-accent text-black px-3 py-1 rounded-[4px] text-[10px] font-black uppercase mb-4 inline-block tracking-tighter">
+                {eventData.badge}
+              </span>
+              <h1 className="text-4xl md:text-5xl lg:text-7xl font-light leading-[1.1] mb-8 tracking-tight">
+                {eventData.title1} <br className="hidden md:block" /> <span className="font-bold">{eventData.title2}</span>
+              </h1>
+              <div className="flex flex-wrap gap-6 text-sm text-white/50">
+                <span className="flex items-center gap-2"><MapPin size={14} className="text-accent" /> {eventData.venue}</span>
+                <span className="flex items-center gap-2">
+                  <Calendar size={14} className="text-accent" /> 
+                  {eventData.dateTime}
+                </span>
+                <span className="flex items-center gap-2"><Star size={14} className="text-accent" /> {eventData.artists}</span>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Booking Panel */}
+          <motion.aside 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="bg-surface border border-border rounded-[32px] p-8 backdrop-blur-[20px] flex flex-col gap-8 h-full"
+          >
+            <div>
+              <h2 className="text-[20px] font-bold tracking-tight">Gestión de Entradas</h2>
+              <p className="text-[12px] text-white/40 mt-2 uppercase tracking-widest font-black leading-relaxed">
+                Selecciona tipo de entrada para <br/>
+                <span className="text-accent">{eventData.title1} {eventData.title2}</span>
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              {ticketTypes.map((ticket) => (
+                <div 
+                  key={ticket.id}
+                  className={`p-3.5 border rounded-[16px] bg-white/5 transition-all ${
+                    ticketQuantities[ticket.id] > 0 
+                    ? 'border-accent/40 bg-accent/5' 
+                    : 'border-white/5'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      {isAdminMode ? (
+                        <div className="flex flex-col gap-1">
+                          <input 
+                            type="text"
+                            value={ticket.name}
+                            onChange={(e) => updateTicketType(ticket.id, 'name', e.target.value)}
+                            className="bg-white/10 border border-white/20 rounded px-2 py-0.5 text-[14px] font-bold text-white outline-none focus:border-accent"
+                          />
+                          <input 
+                            type="text"
+                            value={ticket.desc}
+                            onChange={(e) => updateTicketType(ticket.id, 'desc', e.target.value)}
+                            className="bg-white/10 border border-white/20 rounded px-2 py-0.5 text-[10px] text-white/60 outline-none focus:border-accent"
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <h4 className="text-[14px] font-bold tracking-tight">{ticket.name}</h4>
+                          <p className="text-[10px] text-white/40 mt-0.5">{ticket.desc}</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between mt-3">
+                    {isAdminMode ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] uppercase font-bold opacity-30">Precio (S/):</span>
+                        <input 
+                          type="number"
+                          value={ticket.price}
+                          onChange={(e) => updateTicketType(ticket.id, 'price', parseFloat(e.target.value) || 0)}
+                          className="w-16 bg-white/10 border border-white/20 rounded px-2 py-0.5 text-[13px] font-bold text-accent outline-none focus:border-accent"
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-[15px] font-black text-accent tracking-tight">
+                        {ticket.price === 0 ? 'Gratis' : `S/ ${ticket.price.toFixed(2)}`}
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center gap-1.5 bg-black/40 rounded-full px-1 py-0.5 border border-white/10">
+                      <button 
+                        onClick={() => updateQuantity(ticket.id, -1)}
+                        className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors disabled:opacity-20"
+                        disabled={ticketQuantities[ticket.id] <= 0}
+                      >
+                        <Minus size={10} />
+                      </button>
+                      <span className="w-4 text-center font-bold text-[11px]">{ticketQuantities[ticket.id]}</span>
+                      <button 
+                        onClick={() => updateQuantity(ticket.id, 1)}
+                        className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                      >
+                        <Plus size={10} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-auto border-t border-white/10 pt-6">
+              <div className="flex justify-between items-end mb-6">
+                <div>
+                  <span className="text-[11px] uppercase tracking-widest opacity-40 font-bold block mb-1">Subtotal</span>
+                  <span className="text-[12px] font-medium opacity-60">
+                    {totalTickets} {totalTickets === 1 ? 'Entrada' : 'Entradas'} seleccionadas
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[24px] font-black text-accent tracking-tighter">
+                    {totalPrice === 0 ? 'Gratis' : `S/ ${totalPrice.toFixed(2)}`}
+                  </span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsPaymentModalOpen(true)}
+                disabled={totalTickets === 0}
+                className="w-full bg-accent text-black py-4 rounded-[16px] font-black text-[13px] uppercase tracking-[0.2em] hover:bg-accent-dark transition-all disabled:opacity-20 disabled:grayscale"
+              >
+                Continuar con la compra
+              </button>
+              <p className="text-[10px] text-center text-white/30 uppercase tracking-[0.1em] mt-4">
+                🔞 Apto solo para mayores de 18 años. Se requiere DNI físico.
+              </p>
+            </div>
+          </motion.aside>
+        </div>
+
+        {/* Login Modal */}
+        <AnimatePresence>
+          {isLoginModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center px-6">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsLoginModalOpen(false)}
+                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="relative bg-[#111] border border-white/10 p-8 rounded-[24px] w-full max-w-sm shadow-[0_30px_60px_rgba(0,0,0,0.8)]"
+              >
+                <div className="text-center mb-8">
+                  <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent mx-auto mb-4">
+                    <User size={24} />
+                  </div>
+                  <h3 className="text-xl font-bold">Acceso Administrativo</h3>
+                  <p className="text-[10px] text-white/40 uppercase tracking-widest mt-2">Introduce tus credenciales de acceso</p>
+                </div>
+
+                <form onSubmit={handleLogin} className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] uppercase tracking-widest font-bold opacity-40 ml-1">Usuario</label>
+                    <input 
+                      autoFocus
+                      type="text" 
+                      value={loginForm.user}
+                      onChange={(e) => setLoginForm(prev => ({ ...prev, user: e.target.value }))}
+                      className="bg-white/5 border border-white/10 rounded-[12px] py-3 px-4 text-sm outline-none focus:border-accent transition-all"
+                      placeholder="Nombre de usuario"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] uppercase tracking-widest font-bold opacity-40 ml-1">Contraseña</label>
+                    <input 
+                      type="password" 
+                      value={loginForm.pass}
+                      onChange={(e) => setLoginForm(prev => ({ ...prev, pass: e.target.value }))}
+                      className="bg-white/5 border border-white/10 rounded-[12px] py-3 px-4 text-sm outline-none focus:border-accent transition-all"
+                      placeholder="••••••••"
+                    />
+                  </div>
+
+                  {loginError && (
+                    <motion.p 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="text-[10px] text-red-500 font-bold uppercase tracking-widest text-center"
+                    >
+                      Usuario o contraseña incorrectos
+                    </motion.p>
+                  )}
+
+                  <button 
+                    type="submit"
+                    className="w-full bg-accent text-black py-4 rounded-[12px] font-bold text-[12px] uppercase tracking-[0.2em] mt-2 hover:bg-accent-dark transition-colors"
+                  >
+                    Iniciar Sesión
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setIsLoginModalOpen(false)}
+                    className="text-[10px] text-white/40 uppercase tracking-widest font-bold mt-2 hover:text-white transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Payment Modal */}
+        <AnimatePresence>
+          {isPaymentModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center px-6">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsPaymentModalOpen(false)}
+                className="absolute inset-0 bg-black/90 backdrop-blur-xl"
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="relative bg-[#0a0a0a] border border-white/10 p-0 rounded-[32px] w-full max-w-lg shadow-[0_40px_80px_rgba(0,0,0,0.9)] overflow-y-auto max-h-[90vh]"
+              >
+                {/* Header */}
+                <div className="bg-white/[0.03] p-8 border-b border-white/5 relative">
+                  <button 
+                    onClick={() => setIsPaymentModalOpen(false)}
+                    className="absolute right-6 top-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                  <div className="flex items-center gap-4 mb-2">
+                    <div className="p-3 bg-accent/20 rounded-2xl text-accent">
+                      <Wallet size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black tracking-tight text-white">Método de Pago</h3>
+                      <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-black">Selecciona cómo deseas pagar tus entradas</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="p-8">
+                  {/* Selector */}
+                  <div className="flex gap-4 mb-8">
+                    <button 
+                      onClick={() => setPaymentMethod('card')}
+                      className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border transition-all ${
+                        paymentMethod === 'card' 
+                        ? 'bg-accent/10 border-accent text-accent shadow-[0_0_20px_rgba(212,175,55,0.15)]' 
+                        : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
+                      }`}
+                    >
+                      <CreditCard size={28} />
+                      <span className="text-[11px] font-black uppercase tracking-widest">Tarjeta</span>
+                    </button>
+                    <button 
+                      onClick={() => setPaymentMethod('yape')}
+                      className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border transition-all ${
+                        paymentMethod === 'yape' 
+                        ? 'bg-[#742284]/10 border-[#742284] text-[#742284] shadow-[0_0_20px_rgba(116,34,132,0.15)]' 
+                        : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
+                      }`}
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-[#742284] flex items-center justify-center text-white font-black text-[10px]">Y</div>
+                      <span className="text-[11px] font-black uppercase tracking-widest">Yape</span>
+                    </button>
+                  </div>
+
+                  {paymentMethod === 'card' ? (
+                    <motion.div 
+                      key="card-form"
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-4"
+                    >
+                      <div className="space-y-2">
+                        <label className="text-[10px] uppercase tracking-widest font-bold opacity-40 ml-1">Número de Tarjeta</label>
+                        <div className="relative">
+                          <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
+                          <input 
+                            type="text" 
+                            className="w-full bg-black/40 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-sm outline-none focus:border-accent transition-all"
+                            placeholder="0000 0000 0000 0000"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest font-bold opacity-40 ml-1">Vencimiento</label>
+                          <input 
+                            type="text" 
+                            className="w-full bg-black/40 border border-white/10 rounded-xl py-4 px-4 text-sm outline-none focus:border-accent transition-all"
+                            placeholder="MM/YY"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest font-bold opacity-40 ml-1">CVV</label>
+                          <input 
+                            type="text" 
+                            className="w-full bg-black/40 border border-white/10 rounded-xl py-4 px-4 text-sm outline-none focus:border-accent transition-all"
+                            placeholder="***"
+                          />
+                        </div>
+                      </div>
+                      <button 
+                        className="w-full bg-accent text-black py-5 rounded-2xl font-black text-[13px] uppercase tracking-[0.2em] mt-4 shadow-[0_15px_30px_rgba(212,175,55,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all"
+                      >
+                        Pagar S/ {totalPrice.toFixed(2)}
+                      </button>
+                    </motion.div>
+                  ) : (
+                    <motion.div 
+                      key="yape-form"
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="text-center space-y-6 bg-white/[0.02] p-8 rounded-[24px] border border-white/5"
+                    >
+                      <div className="w-48 h-48 bg-white rounded-3xl mx-auto p-4 flex items-center justify-center overflow-hidden">
+                        {yapeData.qrUrl ? (
+                          <img 
+                            src={yapeData.qrUrl} 
+                            alt="Yape QR" 
+                            className="w-full h-full object-contain"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          /* Placeholder QR */
+                          <div className="w-full h-full border-4 border-dashed border-black/10 rounded-xl flex flex-col items-center justify-center text-black/20 gap-2">
+                            <div className="text-4xl text-[#742284] font-black">QR</div>
+                            <p className="text-[8px] font-black uppercase tracking-tighter text-[#742284]">Escanea para pagar</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs text-white/60">O envía el pago al número:</p>
+                        <p className="text-2xl font-black text-white tracking-widest">{yapeData.number}</p>
+                        <p className="text-[10px] text-accent font-bold uppercase tracking-widest">Titular: {yapeData.holder}</p>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          alert("Enviando comprobante...");
+                          setIsPaymentModalOpen(false);
+                        }}
+                        className="w-full bg-[#742284] text-white py-5 rounded-2xl font-black text-[13px] uppercase tracking-[0.2em] mt-4 hover:bg-[#8e29a1] transition-all"
+                      >
+                        Ya yapeé S/ {totalPrice.toFixed(2)}
+                      </button>
+                    </motion.div>
+                  )}
+                </div>
+
+                {/* Footer Info */}
+                <div className="p-8 pt-0 flex items-center justify-center gap-3 opacity-40">
+                  <Check size={14} />
+                  <span className="text-[9px] uppercase font-bold tracking-[0.2em]">Pago 100% seguro y encriptado</span>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        
+        {/* Upcoming Events Section (Moved and Refined) */}
+        <section className="mt-20">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
+            <div>
+              <span className="text-accent text-[10px] font-black uppercase tracking-[0.5em] mb-4 block">Descubre Experiencias</span>
+              <h2 className="text-4xl md:text-5xl lg:text-6xl font-light tracking-tighter">Próximos <span className="font-serif italic font-normal text-white/90">Eventos</span></h2>
+            </div>
+            
+            {/* Slider Controls */}
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => scrollSlider('left')}
+                className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:border-white transition-all bg-white/5"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <button 
+                onClick={() => scrollSlider('right')}
+                className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:border-white transition-all bg-white/5"
+              >
+                <ChevronRight size={24} />
+              </button>
+              
+              <div className="h-[1px] w-12 bg-white/10 self-center hidden md:block" />
+
+              {/* Category Filters (Opciones) */}
+              <div className="flex flex-wrap gap-2">
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`px-6 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                      activeCategory === cat 
+                      ? 'bg-accent border-accent text-black shadow-[0_10px_20px_rgba(212,175,55,0.2)]' 
+                      : 'bg-white/5 border-white/10 text-white/40 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div 
+            ref={sliderRef}
+            className="flex gap-5 md:gap-8 overflow-x-auto pb-12 snap-x snap-mandatory no-scrollbar"
+            style={{ 
+              scrollbarWidth: 'none', 
+              msOverflowStyle: 'none',
+              scrollPadding: '0 2rem'
+            }}
+          >
+            <AnimatePresence mode="popLayout">
+              {filteredEvents.map((event) => (
+                <motion.div 
+                  key={event.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  whileHover={{ y: -8 }}
+                  className={`flex-none w-[240px] md:w-[280px] lg:w-[306px] snap-start group relative aspect-[4/5.2] rounded-[32px] overflow-hidden border transition-all cursor-pointer ${
+                    currentEventId === event.id ? 'border-accent shadow-[0_20px_50px_rgba(212,175,55,0.1)]' : 'border-white/5 shadow-2xl'
+                  }`}
+                  onClick={() => {
+                    setCurrentEventId(event.id);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                >
+                  <img 
+                    src={event.bannerImage} 
+                    alt={event.title2}
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+                  
+                  <div className="absolute top-6 left-6 flex flex-col gap-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-accent bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-accent/20 w-fit">
+                      {event.badge}
+                    </span>
+                  </div>
+
+                  <div className="absolute bottom-0 left-0 p-8 w-full">
+                    <p className="text-[10px] font-bold text-accent uppercase tracking-[0.2em] mb-2">{event.date}</p>
+                    <h3 className="text-2xl font-light leading-tight mb-6">
+                      {event.title1} <br /><span className="font-bold">{event.title2}</span>
+                    </h3>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] uppercase font-bold text-white/30 tracking-widest">Desde</span>
+                        <span className="text-lg font-black text-white">S/ {event.price}</span>
+                      </div>
+                      <motion.div 
+                        whileHover={{ scale: 1.1 }}
+                        className="w-12 h-12 rounded-2xl bg-white text-black flex items-center justify-center shadow-xl group-hover:bg-accent transition-colors"
+                      >
+                        <ArrowRight size={20} />
+                      </motion.div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-white/5 py-10 px-10">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-[10px] uppercase tracking-[0.2em] text-white/20">
+          <span>&copy; 2026 BALI PREMIUM. ALL RIGHTS RESERVED.</span>
+          <div className="flex gap-8 mt-4 md:mt-0">
+            <a href="#" className="hover:text-white">Privacy</a>
+            <a href="#" className="hover:text-white">Terms</a>
+            <a href="#" className="hover:text-white">Support</a>
+          </div>
+        </div>
+      </footer>
+
+      {/* Mobile Menu Overlay */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed inset-0 z-[100] bg-[#050505] p-10 flex flex-col"
+          >
+            <div className="flex justify-between items-center mb-16">
+              <span className="text-2xl font-black tracking-widest text-accent">Bali</span>
+              <button onClick={() => setIsMenuOpen(false)}><X size={32} /></button>
+            </div>
+            <div className="flex flex-col gap-10">
+              <a href="#" className="text-4xl font-light hover:text-accent">Explorar</a>
+              <a href="#" className="text-4xl font-light hover:text-accent">Festivales</a>
+              <a href="#" className="text-4xl font-light hover:text-accent">Conciertos</a>
+              <a href="#" className="text-4xl font-light hover:text-accent">Mis Entradas</a>
+            </div>
+            <div className="mt-auto pt-10 border-t border-white/5 flex items-center justify-between">
+               <span className="text-xs uppercase tracking-widest opacity-60">Julian R.</span>
+               <button className="bg-accent text-black px-8 py-3 rounded-xl font-bold uppercase text-xs">Logout</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
