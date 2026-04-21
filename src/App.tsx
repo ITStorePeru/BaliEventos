@@ -143,8 +143,8 @@ export default function App() {
 
   const [brandData, setBrandData] = useState({
     name: "Bali",
-    logoUrl: "",
-    useLogo: false
+    logoUrl: "https://i.ibb.co/XZZMPkyL/logo.png",
+    useLogo: true
   });
 
   const [yapeData, setYapeData] = useState({

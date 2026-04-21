@@ -88,7 +88,7 @@ INSERT INTO ticket_types (id, name, description, price) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO site_settings (id, data) VALUES
-('brand', '{"name": "Bali", "logoUrl": "", "useLogo": false}'),
+('brand', '{"name": "Bali", "logoUrl": "https://i.ibb.co/XZZMPkyL/logo.png", "useLogo": true}'),
 ('yape', '{"number": "999 000 111", "holder": "BALI EVENTOS SAC", "qrUrl": ""}'),
 ('seo', '{"title": "Bali - Eventos y Entradas", "description": "La plataforma líder en eventos culturales y de entretenimiento en Bali.", "keywords": "bali, eventos, entradas", "ogImage": ""}')
 ON CONFLICT (id) DO NOTHING;
