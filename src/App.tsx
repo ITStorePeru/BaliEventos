@@ -847,8 +847,9 @@ export default function App() {
                           </div>
                         )}
                         {events.map((event) => (
-                          <div 
+                          <motion.div 
                             key={event.id}
+                            whileHover={{ scale: 1.01 }}
                             className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
                               currentEventId === event.id 
                               ? 'bg-accent/10 border-accent/30' 
@@ -890,7 +891,7 @@ export default function App() {
                                 <X size={14} />
                               </button>
                             </div>
-                          </div>
+                          </motion.div>
                         ))}
                       </div>
                     </motion.div>
@@ -1121,7 +1122,11 @@ export default function App() {
                       
                       <div className="space-y-4">
                         {ticketTypes.map((ticket) => (
-                          <div key={ticket.id} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_120px_40px] gap-4 bg-white/5 p-4 rounded-2xl border border-white/5 items-center">
+                          <motion.div 
+                            key={ticket.id} 
+                            whileHover={{ scale: 1.01, backgroundColor: "rgba(255, 255, 255, 0.08)" }}
+                            className="grid grid-cols-1 md:grid-cols-[1fr_2fr_120px_40px] gap-4 bg-white/5 p-4 rounded-2xl border border-white/10 items-center transition-colors group"
+                          >
                             <input 
                               type="text" 
                               value={ticket.name}
@@ -1150,7 +1155,7 @@ export default function App() {
                             >
                               <X size={14} />
                             </button>
-                          </div>
+                          </motion.div>
                         ))}
                       </div>
                     </motion.div>
@@ -1184,7 +1189,11 @@ export default function App() {
                           </div>
                         ) : (
                           adminUsers.map((user) => (
-                            <div key={user.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_40px] gap-4 bg-white/5 p-4 rounded-2xl border border-white/5 items-center">
+                            <motion.div 
+                              key={user.id} 
+                              whileHover={{ scale: 1.01, backgroundColor: "rgba(255, 255, 255, 0.08)" }}
+                              className="grid grid-cols-1 md:grid-cols-[1fr_1fr_40px] gap-4 bg-white/5 p-4 rounded-2xl border border-white/10 items-center transition-colors group"
+                            >
                               <div className="flex flex-col gap-1">
                                 <label className="text-[8px] uppercase font-black text-white/30 tracking-widest ml-1">Usuario</label>
                                 <div className="relative">
@@ -1216,7 +1225,7 @@ export default function App() {
                               >
                                 <X size={14} />
                               </button>
-                            </div>
+                            </motion.div>
                           ))
                         )}
                         <div className="p-4 bg-accent/5 border border-accent/10 rounded-2xl">
@@ -1409,12 +1418,13 @@ export default function App() {
 
             <div className="flex flex-col gap-3">
               {ticketTypes.map((ticket) => (
-                <div 
+                <motion.div 
                   key={ticket.id}
-                  className={`p-3 border rounded-[14px] bg-white/5 transition-all ${
+                  whileHover={{ backgroundColor: "rgba(255, 255, 255, 0.08)", scale: 1.02 }}
+                  className={`p-3 border rounded-[14px] bg-white/5 transition-all cursor-default ${
                     ticketQuantities[ticket.id] > 0 
                     ? 'border-accent/40 bg-accent/5' 
-                    : 'border-white/5'
+                    : 'border-white/5 hover:border-white/20'
                   }`}
                 >
                   <div className="flex justify-between items-center">
@@ -1477,7 +1487,7 @@ export default function App() {
                       </button>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
 
