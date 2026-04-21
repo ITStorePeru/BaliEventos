@@ -565,6 +565,28 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
+  const handleAddTicketType = () => {
+    const newId = `ticket-${Date.now()}`;
+    const newTicket = {
+      id: newId,
+      name: 'NUEVA ENTRADA',
+      desc: 'Descripción de la entrada',
+      price: 0
+    };
+    setTicketTypes(prev => [...prev, newTicket]);
+    setTicketQuantities(prev => ({ ...prev, [newId]: 0 }));
+    setHasUnsavedChanges(true);
+  };
+
+  const handleDeleteTicketType = (id: string) => {
+    if (ticketTypes.length <= 1) {
+      alert("Debes tener al menos un tipo de entrada.");
+      return;
+    }
+    setTicketTypes(prev => prev.filter(t => t.id !== id));
+    setHasUnsavedChanges(true);
+  };
+
   const updateBrand = (field: string, value: string | boolean) => {
     const newData = { ...brandData, [field]: value };
     setBrandData(newData);
@@ -1083,14 +1105,23 @@ export default function App() {
                       animate={{ opacity: 1, x: 0 }}
                       className="space-y-6"
                     >
-                      <div className="flex items-center gap-2 mb-4">
-                        <div className="w-1.5 h-4 bg-accent rounded-full" />
-                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Gestión de Entradas</span>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-4 bg-accent rounded-full" />
+                          <span className="text-[10px] font-black text-white uppercase tracking-widest">Gestión de Entradas</span>
+                        </div>
+                        <button 
+                          onClick={handleAddTicketType}
+                          className="flex items-center gap-2 bg-accent text-black px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-accent-dark transition-all"
+                        >
+                          <Plus size={14} />
+                          Agregar Tipo de Entrada
+                        </button>
                       </div>
                       
                       <div className="space-y-4">
                         {ticketTypes.map((ticket) => (
-                          <div key={ticket.id} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_120px] gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+                          <div key={ticket.id} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_120px_40px] gap-4 bg-white/5 p-4 rounded-2xl border border-white/5 items-center">
                             <input 
                               type="text" 
                               value={ticket.name}
@@ -1109,9 +1140,16 @@ export default function App() {
                                 type="number" 
                                 value={ticket.price}
                                 onChange={(e) => updateTicketType(ticket.id, 'price', parseFloat(e.target.value) || 0)}
-                                className="w-full bg-transparent text-[11px] font-bold text-white outline-none"
+                                className="w-full bg-transparent text-[11px] font-bold text-white outline-none py-2"
                               />
                             </div>
+                            <button 
+                              onClick={() => handleDeleteTicketType(ticket.id)}
+                              className="p-2.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
+                              title="Eliminar tipo de entrada"
+                            >
+                              <X size={14} />
+                            </button>
                           </div>
                         ))}
                       </div>
