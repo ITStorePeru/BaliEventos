@@ -20,6 +20,8 @@ import {
   Star,
   Settings,
   Image as ImageIcon,
+  Target,
+  Users,
   Check,
   Edit2,
   Plus,
@@ -102,7 +104,7 @@ export default function App() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'yape'>('yape');
   const [customerData, setCustomerData] = useState({ name: '', email: '', whatsapp: '' });
-  const [adminTab, setAdminTab] = useState<'brand' | 'event' | 'payment' | 'tickets' | 'events_list' | 'seo'>('events_list');
+  const [adminTab, setAdminTab] = useState<'brand' | 'event' | 'payment' | 'tickets' | 'events_list' | 'seo' | 'users'>('events_list');
   const [isLoading, setIsLoading] = useState(true);
   const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; error: string | null }>({ connected: false, error: null });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -157,6 +159,8 @@ export default function App() {
     keywords: "bali, eventos, entradas, festivales, conciertos, uluwatu, música, cultura",
     ogImage: "https://picsum.photos/seed/bali-og/1200/630"
   });
+
+  const [adminUsers, setAdminUsers] = useState<{ id: string | number; username: string; password?: string }[]>([]);
 
   // SEO Effect
   useEffect(() => {
@@ -221,6 +225,17 @@ export default function App() {
           if (setting.id === 'yape') setYapeData(setting.data);
           if (setting.id === 'seo') setSeoData(setting.data);
         });
+      }
+
+      // Fetch Admin Users
+      const { data: usersData, error: usersError } = await supabase
+        .from('admin_users')
+        .select('*');
+      
+      if (!usersError && usersData) {
+        setAdminUsers(usersData);
+      } else if (usersError) {
+        console.warn('Could not fetch admin users, might need to run the SQL migration.', usersError);
       }
 
     } catch (error) {
@@ -342,7 +357,11 @@ export default function App() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginForm.user === 'Julio' && loginForm.pass === 'Vilca') {
+    // Try matching database users first, fallback to hardcoded for first run safety
+    const foundUser = adminUsers.find(u => u.username === loginForm.user && u.password === loginForm.pass);
+    const isHardcodedMaster = loginForm.user === 'Julio' && loginForm.pass === 'Vilca';
+
+    if (foundUser || isHardcodedMaster) {
       setIsAuthenticated(true);
       setIsAdminMode(true);
       setIsLoginModalOpen(false);
@@ -416,6 +435,14 @@ export default function App() {
         .upsert(ticketUpdates);
       
       if (ticketsError) throw ticketsError;
+
+      // 4. Save Admin Users
+      if (adminUsers.length > 0) {
+        const { error: usersError } = await supabase
+          .from('admin_users')
+          .upsert(adminUsers);
+        if (usersError) throw usersError;
+      }
 
       setHasUnsavedChanges(false);
       alert("¡Todos los cambios han sido guardados en la base de datos!");
@@ -556,6 +583,26 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
+  const handleAddUser = () => {
+    const newUser = {
+      id: Date.now(),
+      username: 'Nuevo Usuario',
+      password: 'password123'
+    };
+    setAdminUsers(prev => [...prev, newUser]);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleDeleteUser = (id: string | number) => {
+    setAdminUsers(prev => prev.filter(u => u.id !== id));
+    setHasUnsavedChanges(true);
+  };
+
+  const handleUpdateUser = (id: string | number, field: string, value: string) => {
+    setAdminUsers(prev => prev.map(u => u.id === id ? { ...u, [field]: value } : u));
+    setHasUnsavedChanges(true);
+  };
+
   const handlePurchase = async () => {
     if (!customerData.name || !customerData.email || !customerData.whatsapp) {
       alert("Por favor completa tus datos de contacto.");
@@ -596,7 +643,7 @@ export default function App() {
     }
   };
 
-  const totalTickets = Object.values(ticketQuantities).reduce((a: number, b: number) => a + b, 0);
+  const totalTickets = (Object.values(ticketQuantities) as number[]).reduce((a: number, b: number) => a + b, 0);
   const totalPrice = Object.entries(ticketQuantities).reduce((acc: number, [id, qty]) => {
     const ticket = ticketTypes.find(t => t.id === id);
     const quantity = qty as number;
@@ -616,7 +663,7 @@ export default function App() {
     <div className="min-h-screen bg-transparent">
       {/* Navigation - Immersive Style */}
       <nav className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/40 backdrop-blur-xl">
-        <div className="max-w-[1400px] mx-auto px-6 lg:px-10 h-20 flex items-center justify-between">
+        <div className="max-w-[1400px] mx-auto px-4 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {brandData.useLogo && brandData.logoUrl ? (
               <img 
@@ -671,7 +718,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="max-w-[1400px] mx-auto px-6 lg:px-10 pt-28 md:pt-32 pb-20">
+      <main className="max-w-[1400px] mx-auto px-4 lg:px-8 pt-16 md:pt-20 pb-12">
         {/* Admin Panel Overlay */}
         <AnimatePresence>
           {isAdminMode && (
@@ -679,16 +726,16 @@ export default function App() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="mb-8 overflow-hidden bg-white/5 border border-white/10 rounded-[20px] p-6 backdrop-blur-md"
+              className="mb-4 overflow-hidden bg-white/5 border border-white/10 rounded-[20px] p-4 backdrop-blur-md"
             >
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-accent/20 flex items-center justify-center text-accent">
-                    <Settings size={20} className="animate-spin-slow" />
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-accent/20 flex items-center justify-center text-accent">
+                    <Settings size={16} className="animate-spin-slow" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold tracking-tight text-white focus:outline-none">Panel de Administración</h3>
-                    <p className="text-[10px] text-white/40 uppercase tracking-[0.15em] font-black">Gestiona tu marca, pagos y detalles del evento</p>
+                    <h3 className="text-md font-bold tracking-tight text-white focus:outline-none">Panel de Administración</h3>
+                    <p className="text-[9px] text-white/40 uppercase tracking-[0.1em] font-black">Gestiona tu marca, pagos y detalles del evento</p>
                   </div>
                 </div>
                 
@@ -711,15 +758,16 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex flex-col md:flex-row gap-8 bg-black/20 rounded-[24px] border border-white/5 p-2 overflow-hidden">
+              <div className="flex flex-col md:flex-row gap-4 bg-black/20 rounded-[20px] border border-white/5 p-1.5 overflow-hidden">
                 {/* Admin Sidebar Navigation */}
-                <div className="w-full md:w-64 flex flex-row md:flex-col gap-1 p-2 border-b md:border-b-0 md:border-r border-white/5">
+                <div className="w-full md:w-56 flex flex-wrap md:flex-col gap-1 p-1.5 border-b md:border-b-0 md:border-r border-white/5">
                   {[
                     { id: 'events_list', label: 'Gestión Eventos', icon: Calendar },
                     { id: 'event', label: 'Editor Detalle', icon: ImageIcon },
                     { id: 'brand', label: 'Identidad', icon: Star },
                     { id: 'payment', label: 'Pagos / Yape', icon: Wallet },
                     { id: 'tickets', label: 'Entradas', icon: Ticket },
+                    { id: 'users', label: 'Gestión Usuarios', icon: Users },
                     { id: 'seo', label: 'SEO / Meta', icon: Globe },
                   ].map((tab) => (
                     <button
@@ -1070,6 +1118,78 @@ export default function App() {
                     </motion.div>
                   )}
 
+                  {adminTab === 'users' && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-4 bg-accent rounded-full" />
+                          <span className="text-[10px] font-black text-white uppercase tracking-widest">Usuarios Administradores</span>
+                        </div>
+                        <button 
+                          onClick={handleAddUser}
+                          className="flex items-center gap-2 bg-accent text-black px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-accent-dark transition-all"
+                        >
+                          <Plus size={14} />
+                          Agregar Administrador
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                        {adminUsers.length === 0 ? (
+                          <div className="text-center py-10 bg-white/5 rounded-2xl border border-white/5">
+                            <Users size={32} className="mx-auto mb-3 opacity-20" />
+                            <p className="text-[10px] uppercase font-bold text-white/30 tracking-widest">No hay usuarios adicionales registrados</p>
+                          </div>
+                        ) : (
+                          adminUsers.map((user) => (
+                            <div key={user.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_40px] gap-4 bg-white/5 p-4 rounded-2xl border border-white/5 items-center">
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[8px] uppercase font-black text-white/30 tracking-widest ml-1">Usuario</label>
+                                <div className="relative">
+                                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={12} />
+                                  <input 
+                                    type="text" 
+                                    value={user.username}
+                                    onChange={(e) => handleUpdateUser(user.id, 'username', e.target.value)}
+                                    className="w-full bg-black/20 border border-white/10 rounded-[10px] py-2.5 pl-9 pr-3 text-[11px] font-bold text-white outline-none focus:border-accent transition-all"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[8px] uppercase font-black text-white/30 tracking-widest ml-1">Contraseña</label>
+                                <div className="relative">
+                                  <Edit2 className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={12} />
+                                  <input 
+                                    type="text" 
+                                    value={user.password}
+                                    onChange={(e) => handleUpdateUser(user.id, 'password', e.target.value)}
+                                    className="w-full bg-black/20 border border-white/10 rounded-[10px] py-2.5 pl-9 pr-3 text-[11px] font-bold text-white outline-none focus:border-accent transition-all"
+                                  />
+                                </div>
+                              </div>
+                              <button 
+                                onClick={() => handleDeleteUser(user.id)}
+                                className="p-2.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all self-end md:self-center"
+                                title="Eliminar usuario"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                        <div className="p-4 bg-accent/5 border border-accent/10 rounded-2xl">
+                          <p className="text-[9px] text-accent font-bold uppercase tracking-[0.2em] leading-relaxed">
+                            ⚠️ Nota: Los usuarios registrados aquí tendrán acceso total al panel de administración. El usuario maestro 'Julio' siempre tiene acceso como respaldo.
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
                   {adminTab === 'seo' && (
                     <motion.div 
                       initial={{ opacity: 0, x: 10 }}
@@ -1190,12 +1310,12 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6 lg:gap-10 min-h-fit lg:min-h-[600px]">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4 lg:gap-6 min-h-fit lg:min-h-[500px]">
           {/* Featured Card */}
           <motion.div 
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="group relative rounded-[32px] bg-[#111] overflow-hidden shadow-2xl border border-white/5 p-8 md:p-12 lg:p-16 flex flex-col justify-end min-h-[450px] md:min-h-[550px] lg:min-h-full"
+            className="group relative rounded-[32px] bg-[#111] overflow-hidden shadow-2xl border border-white/5 p-5 md:p-6 lg:p-8 flex flex-col justify-end min-h-[380px] md:min-h-[420px] lg:min-h-full"
           >
             <div className="absolute inset-0 z-0">
               <img 
@@ -1239,21 +1359,21 @@ export default function App() {
           <motion.aside 
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="bg-surface border border-border rounded-[32px] p-8 backdrop-blur-[20px] flex flex-col gap-8 h-full"
+            className="bg-surface border border-border rounded-[24px] p-5 backdrop-blur-[20px] flex flex-col gap-5 h-full"
           >
             <div>
-              <h2 className="text-[20px] font-bold tracking-tight">Gestión de Entradas</h2>
-              <p className="text-[12px] text-white/40 mt-2 uppercase tracking-widest font-black leading-relaxed">
+              <h2 className="text-[18px] font-bold tracking-tight">Gestión de Entradas</h2>
+              <p className="text-[11px] text-white/40 mt-1 uppercase tracking-widest font-black leading-relaxed">
                 Selecciona tipo de entrada para <br/>
                 <span className="text-accent">{eventData.title1} {eventData.title2}</span>
               </p>
             </div>
 
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               {ticketTypes.map((ticket) => (
                 <div 
                   key={ticket.id}
-                  className={`p-3.5 border rounded-[16px] bg-white/5 transition-all ${
+                  className={`p-3 border rounded-[14px] bg-white/5 transition-all ${
                     ticketQuantities[ticket.id] > 0 
                     ? 'border-accent/40 bg-accent/5' 
                     : 'border-white/5'
@@ -1323,16 +1443,16 @@ export default function App() {
               ))}
             </div>
 
-            <div className="mt-auto border-t border-white/10 pt-6">
-              <div className="flex justify-between items-end mb-6">
+            <div className="mt-auto border-t border-white/10 pt-4">
+              <div className="flex justify-between items-end mb-4">
                 <div>
-                  <span className="text-[11px] uppercase tracking-widest opacity-40 font-bold block mb-1">Subtotal</span>
-                  <span className="text-[12px] font-medium opacity-60">
+                  <span className="text-[10px] uppercase tracking-widest opacity-40 font-bold block mb-0.5">Subtotal</span>
+                  <span className="text-[11px] font-medium opacity-60">
                     {totalTickets} {totalTickets === 1 ? 'Entrada' : 'Entradas'} seleccionadas
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[24px] font-black text-accent tracking-tighter">
+                  <span className="text-[20px] font-black text-accent tracking-tighter">
                     {totalPrice === 0 ? 'Gratis' : `S/ ${totalPrice.toFixed(2)}`}
                   </span>
                 </div>
@@ -1340,16 +1460,51 @@ export default function App() {
               <button 
                 onClick={() => setIsPaymentModalOpen(true)}
                 disabled={totalTickets === 0}
-                className="w-full bg-accent text-black py-4 rounded-[16px] font-black text-[13px] uppercase tracking-[0.2em] hover:bg-accent-dark transition-all disabled:opacity-20 disabled:grayscale"
+                className="w-full bg-accent text-black py-3 rounded-[10px] font-black text-[11px] uppercase tracking-[0.2em] hover:bg-accent-dark transition-all disabled:opacity-20 disabled:grayscale"
               >
                 Continuar con la compra
               </button>
-              <p className="text-[10px] text-center text-white/30 uppercase tracking-[0.1em] mt-4">
+              <p className="text-[9px] text-center text-white/30 uppercase tracking-[0.1em] mt-3">
                 🔞 Apto solo para mayores de 18 años. Se requiere DNI físico.
               </p>
             </div>
           </motion.aside>
         </div>
+
+        {/* Floating Responsive Checkout Bar (Mobile/Tablet) */}
+        <AnimatePresence>
+          {totalTickets > 0 && !isPaymentModalOpen && !isLoginModalOpen && !isAdminMode && (
+            <motion.div 
+              initial={{ y: 50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 50, opacity: 0 }}
+              className="fixed bottom-4 left-4 right-4 z-[80] lg:hidden"
+            >
+              <div className="relative group max-w-md mx-auto">
+                <div className="absolute -inset-0.5 bg-accent/20 rounded-[22px] blur opacity-40"></div>
+                <div className="relative bg-black/80 border border-white/10 rounded-[20px] p-1.5 pr-1.5 shadow-2xl backdrop-blur-xl flex items-center justify-between gap-4">
+                  <div className="pl-5 flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <div className="w-1 h-3 bg-accent rounded-full opacity-70" />
+                      <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.1em]">{totalTickets} {totalTickets === 1 ? 'entrada' : 'entradas'}</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-[18px] font-black text-accent tracking-tighter">
+                        {totalPrice === 0 ? 'Gratis' : `S/ ${totalPrice.toFixed(2)}`}
+                      </span>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setIsPaymentModalOpen(true)}
+                    className="bg-accent text-black px-8 py-3.5 rounded-[16px] font-black text-[11px] uppercase tracking-[0.15em] shadow-[0_10px_20px_rgba(212,175,55,0.3)] active:scale-95 transition-all hover:bg-accent-dark"
+                  >
+                    Continuar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Login Modal */}
         <AnimatePresence>
@@ -1443,97 +1598,99 @@ export default function App() {
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                className="relative bg-[#0a0a0a] border border-white/10 p-0 rounded-[32px] w-full max-w-lg shadow-[0_40px_80px_rgba(0,0,0,0.9)] overflow-y-auto max-h-[90vh]"
+                className="relative bg-[#0a0a0a] border border-white/10 p-0 rounded-[28px] w-full max-w-md shadow-[0_40px_80px_rgba(0,0,0,0.9)] overflow-y-auto max-h-[95vh] no-scrollbar"
               >
                 {/* Header */}
-                <div className="bg-white/[0.03] p-8 border-b border-white/5 relative">
+                <div className="bg-white/[0.03] p-5 border-b border-white/5 relative">
                   <button 
                     onClick={() => setIsPaymentModalOpen(false)}
-                    className="absolute right-6 top-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+                    className="absolute right-5 top-5 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
                   >
-                    <X size={20} />
+                    <X size={18} />
                   </button>
-                  <div className="flex items-center gap-4 mb-2">
-                    <div className="p-3 bg-accent/20 rounded-2xl text-accent">
-                      <Wallet size={24} />
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-accent/20 rounded-xl text-accent">
+                      <Wallet size={20} />
                     </div>
                     <div>
-                      <h3 className="text-2xl font-black tracking-tight text-white">Método de Pago</h3>
-                      <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-black">Selecciona cómo deseas pagar tus entradas</p>
+                      <h3 className="text-xl font-black tracking-tight text-white">Método de Pago</h3>
+                      <p className="text-[9px] text-white/40 uppercase tracking-[0.15em] font-black">Selecciona cómo deseas pagar</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Body */}
-                <div className="p-8">
+                <div className="p-5">
                   {/* Customer Info Form */}
-                  <div className="mb-8 space-y-4">
-                    <div className="flex items-center gap-2 mb-4">
+                  <div className="mb-5 space-y-3">
+                    <div className="flex items-center gap-2 mb-3">
                       <div className="w-1 h-3 bg-accent rounded-full" />
-                      <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Tus Datos de Contacto</span>
+                      <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.15em]">Tus Datos de Contacto</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1.5 flex flex-col">
-                        <label className="text-[9px] uppercase tracking-widest font-black text-white/30 ml-1">Nombre Completo</label>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="space-y-1 flex flex-col">
+                        <label className="text-[8px] uppercase tracking-widest font-black text-white/30 ml-1">Nombre Completo</label>
                         <input 
                           type="text" 
                           value={customerData.name}
                           onChange={(e) => setCustomerData(prev => ({ ...prev, name: e.target.value }))}
                           placeholder="Tu nombre completo"
-                          className="w-full bg-white/[0.03] border border-white/5 rounded-xl py-3.5 px-4 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
+                          className="w-full bg-white/[0.03] border border-white/5 rounded-lg py-2.5 px-3.5 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
                         />
                       </div>
-                      <div className="space-y-1.5 flex flex-col">
-                        <label className="text-[9px] uppercase tracking-widest font-black text-white/30 ml-1">Email</label>
-                        <input 
-                          type="email" 
-                          value={customerData.email}
-                          onChange={(e) => setCustomerData(prev => ({ ...prev, email: e.target.value }))}
-                          placeholder="tu@email.com"
-                          className="w-full bg-white/[0.03] border border-white/5 rounded-xl py-3.5 px-4 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
-                        />
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1 flex flex-col">
+                          <label className="text-[8px] uppercase tracking-widest font-black text-white/30 ml-1">Email</label>
+                          <input 
+                            type="email" 
+                            value={customerData.email}
+                            onChange={(e) => setCustomerData(prev => ({ ...prev, email: e.target.value }))}
+                            placeholder="tu@email.com"
+                            className="w-full bg-white/[0.03] border border-white/5 rounded-lg py-2.5 px-3.5 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
+                          />
+                        </div>
+                        <div className="space-y-1 flex flex-col">
+                          <label className="text-[8px] uppercase tracking-widest font-black text-white/30 ml-1">WhatsApp</label>
+                          <input 
+                            type="tel" 
+                            value={customerData.whatsapp}
+                            onChange={(e) => setCustomerData(prev => ({ ...prev, whatsapp: e.target.value }))}
+                            placeholder="+51 9..."
+                            className="w-full bg-white/[0.03] border border-white/5 rounded-lg py-2.5 px-3.5 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="space-y-1.5 flex flex-col">
-                      <label className="text-[9px] uppercase tracking-widest font-black text-white/30 ml-1">WhatsApp / Celular</label>
-                      <input 
-                        type="tel" 
-                        value={customerData.whatsapp}
-                        onChange={(e) => setCustomerData(prev => ({ ...prev, whatsapp: e.target.value }))}
-                        placeholder="+51 999 888 777"
-                        className="w-full bg-white/[0.03] border border-white/5 rounded-xl py-3.5 px-4 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
-                      />
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 mb-4">
+                  <div className="flex items-center gap-2 mb-3">
                     <div className="w-1 h-3 bg-accent rounded-full" />
-                    <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Selecciona Método de Pago</span>
+                    <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.15em]">Selecciona Método de Pago</span>
                   </div>
 
                   {/* Selector */}
-                  <div className="flex gap-4 mb-8">
+                  <div className="flex gap-3 mb-5">
                     <button 
                       onClick={() => setPaymentMethod('card')}
-                      className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border transition-all ${
+                      className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
                         paymentMethod === 'card' 
-                        ? 'bg-accent/10 border-accent text-accent shadow-[0_0_20px_rgba(212,175,55,0.15)]' 
-                        : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
+                        ? 'bg-accent/10 border-accent text-accent' 
+                        : 'bg-white/5 border-white/10 text-white/40'
                       }`}
                     >
-                      <CreditCard size={28} />
-                      <span className="text-[11px] font-black uppercase tracking-widest">Tarjeta</span>
+                      <CreditCard size={20} />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Tarjeta</span>
                     </button>
                     <button 
                       onClick={() => setPaymentMethod('yape')}
-                      className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border transition-all ${
+                      className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
                         paymentMethod === 'yape' 
-                        ? 'bg-[#742284]/10 border-[#742284] text-[#742284] shadow-[0_0_20px_rgba(116,34,132,0.15)]' 
-                        : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
+                        ? 'bg-[#742284]/10 border-[#742284] text-[#742284]' 
+                        : 'bg-white/5 border-white/10 text-white/40'
                       }`}
                     >
-                      <div className="w-7 h-7 rounded-lg bg-[#742284] flex items-center justify-center text-white font-black text-[10px]">Y</div>
-                      <span className="text-[11px] font-black uppercase tracking-widest">Yape</span>
+                      <div className="w-5 h-5 rounded-md bg-[#742284] flex items-center justify-center text-white font-black text-[8px]">Y</div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Yape</span>
                     </button>
                   </div>
 
@@ -1542,42 +1699,42 @@ export default function App() {
                       key="card-form"
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
-                      className="space-y-4"
+                      className="space-y-3"
                     >
-                      <div className="space-y-2">
-                        <label className="text-[10px] uppercase tracking-widest font-bold opacity-40 ml-1">Número de Tarjeta</label>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] uppercase tracking-widest font-bold opacity-40 ml-1">Número de Tarjeta</label>
                         <div className="relative">
-                          <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
+                          <CreditCard className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/20" size={14} />
                           <input 
                             type="text" 
-                            className="w-full bg-black/40 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-sm outline-none focus:border-accent transition-all"
+                            className="w-full bg-black/40 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-xs outline-none focus:border-accent transition-all"
                             placeholder="0000 0000 0000 0000"
                           />
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] uppercase tracking-widest font-bold opacity-40 ml-1">Vencimiento</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] uppercase tracking-widest font-bold opacity-40 ml-1">Vencimiento</label>
                           <input 
                             type="text" 
-                            className="w-full bg-black/40 border border-white/10 rounded-xl py-4 px-4 text-sm outline-none focus:border-accent transition-all"
+                            className="w-full bg-black/40 border border-white/10 rounded-lg py-3 px-4 text-xs outline-none focus:border-accent transition-all"
                             placeholder="MM/YY"
                           />
                         </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] uppercase tracking-widest font-bold opacity-40 ml-1">CVV</label>
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] uppercase tracking-widest font-bold opacity-40 ml-1">CVV</label>
                           <input 
                             type="text" 
-                            className="w-full bg-black/40 border border-white/10 rounded-xl py-4 px-4 text-sm outline-none focus:border-accent transition-all"
+                            className="w-full bg-black/40 border border-white/10 rounded-lg py-3 px-4 text-xs outline-none focus:border-accent transition-all"
                             placeholder="***"
                           />
                         </div>
                       </div>
                       <button 
                         onClick={handlePurchase}
-                        className="w-full bg-accent text-black py-5 rounded-2xl font-black text-[13px] uppercase tracking-[0.2em] mt-4 shadow-[0_15px_30px_rgba(212,175,55,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all"
+                        className="w-full bg-accent text-black py-3.5 rounded-lg font-black text-[11px] uppercase tracking-[0.15em] mt-1 shadow-[0_10px_20px_rgba(212,175,55,0.2)] hover:scale-[1.01] active:scale-[0.99] transition-all"
                       >
-                        Pagar S/ {totalPrice.toFixed(2)}
+                        Continuar Pago • S/ {totalPrice.toFixed(2)}
                       </button>
                     </motion.div>
                   ) : (
@@ -1585,9 +1742,9 @@ export default function App() {
                       key="yape-form"
                       initial={{ opacity: 0, x: 10 }}
                       animate={{ opacity: 1, x: 0 }}
-                      className="text-center space-y-6 bg-white/[0.02] p-8 rounded-[24px] border border-white/5"
+                      className="text-center space-y-4 bg-white/[0.02] p-5 rounded-[20px] border border-white/5"
                     >
-                      <div className="w-48 h-48 bg-white rounded-3xl mx-auto p-4 flex items-center justify-center overflow-hidden">
+                      <div className="w-32 h-32 bg-white rounded-2xl mx-auto p-2.5 flex items-center justify-center overflow-hidden">
                         {yapeData.qrUrl ? (
                           <img 
                             src={yapeData.qrUrl} 
@@ -1597,33 +1754,33 @@ export default function App() {
                           />
                         ) : (
                           /* Placeholder QR */
-                          <div className="w-full h-full border-4 border-dashed border-black/10 rounded-xl flex flex-col items-center justify-center text-black/20 gap-2">
-                            <div className="text-4xl text-[#742284] font-black">QR</div>
-                            <p className="text-[8px] font-black uppercase tracking-tighter text-[#742284]">Escanea para pagar</p>
+                          <div className="w-full h-full border-4 border-dashed border-black/10 rounded-xl flex flex-col items-center justify-center text-black/20 gap-1">
+                            <div className="text-2xl text-[#742284] font-black">QR</div>
+                            <p className="text-[7px] font-black uppercase tracking-tighter text-[#742284]">Escanea</p>
                           </div>
                         )}
                       </div>
-                      <div className="space-y-2">
-                        <p className="text-xs text-white/60">O envía el pago al número:</p>
-                        <p className="text-2xl font-black text-white tracking-widest">{yapeData.number}</p>
-                        <p className="text-[10px] text-accent font-bold uppercase tracking-widest">Titular: {yapeData.holder}</p>
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-white/50">O envía el pago al número:</p>
+                        <p className="text-xl font-black text-white tracking-widest">{yapeData.number}</p>
+                        <p className="text-[9px] text-accent font-bold uppercase tracking-widest">Titular: {yapeData.holder}</p>
                       </div>
                       <button 
                         onClick={() => {
                           handlePurchase();
                         }}
-                        className="w-full bg-[#742284] text-white py-5 rounded-2xl font-black text-[13px] uppercase tracking-[0.2em] mt-4 hover:bg-[#8e29a1] transition-all"
+                        className="w-full bg-[#742284] text-white py-3.5 rounded-lg font-black text-[10px] uppercase tracking-[0.15em] mt-1 hover:bg-[#8e29a1] transition-all"
                       >
-                        Ya yapeé S/ {totalPrice.toFixed(2)}
+                        Ya yapeé • S/ {totalPrice.toFixed(2)}
                       </button>
                     </motion.div>
                   )}
                 </div>
 
                 {/* Footer Info */}
-                <div className="p-8 pt-0 flex items-center justify-center gap-3 opacity-40">
-                  <Check size={14} />
-                  <span className="text-[9px] uppercase font-bold tracking-[0.2em]">Pago 100% seguro y encriptado</span>
+                <div className="p-5 pt-0 flex items-center justify-center gap-2 opacity-30">
+                  <Check size={12} />
+                  <span className="text-[8px] uppercase font-bold tracking-[0.15em]">Pago 100% seguro y encriptado</span>
                 </div>
               </motion.div>
             </div>
@@ -1631,11 +1788,11 @@ export default function App() {
         </AnimatePresence>
         
         {/* Upcoming Events Section (Moved and Refined) */}
-        <section className="mt-20">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
+        <section className="mt-8">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-5">
             <div>
-              <span className="text-accent text-[10px] font-black uppercase tracking-[0.5em] mb-4 block">Descubre Experiencias</span>
-              <h2 className="text-4xl md:text-5xl lg:text-6xl font-light tracking-tighter">Próximos <span className="font-serif italic font-normal text-white/90">Eventos</span></h2>
+              <span className="text-accent text-[9px] font-black uppercase tracking-[0.4em] mb-1.5 block">Descubre Experiencias</span>
+              <h2 className="text-2xl md:text-3xl lg:text-4xl font-light tracking-tighter">Próximos <span className="font-serif italic font-normal text-white/90">Eventos</span></h2>
             </div>
             
             {/* Slider Controls */}
@@ -1676,7 +1833,7 @@ export default function App() {
 
           <div 
             ref={sliderRef}
-            className="flex gap-5 md:gap-8 overflow-x-auto pb-12 snap-x snap-mandatory no-scrollbar"
+            className="flex gap-4 md:gap-6 overflow-x-auto pb-6 snap-x snap-mandatory no-scrollbar"
             style={{ 
               scrollbarWidth: 'none', 
               msOverflowStyle: 'none',

@@ -19,6 +19,14 @@
   animation: spin-slow 8s linear infinite;
 }
 
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 body {
   @apply bg-[#050505] text-white font-sans antialiased;
   background: radial-gradient(circle at top right, #1a1a1a, black);
