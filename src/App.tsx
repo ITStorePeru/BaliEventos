@@ -101,9 +101,12 @@ export default function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'yape'>('yape');
+  const [customerData, setCustomerData] = useState({ name: '', email: '', whatsapp: '' });
   const [adminTab, setAdminTab] = useState<'brand' | 'event' | 'payment' | 'tickets' | 'events_list' | 'seo'>('events_list');
   const [isLoading, setIsLoading] = useState(true);
   const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; error: string | null }>({ connected: false, error: null });
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Events Management State
   const [events, setEvents] = useState(INITIAL_EVENTS);
@@ -195,7 +198,11 @@ export default function App() {
       
       if (ticketsError) throw ticketsError;
       if (ticketsData && ticketsData.length > 0) {
-        setTicketTypes(ticketsData);
+        const formattedTickets = ticketsData.map(t => ({
+          ...t,
+          desc: t.description || ''
+        }));
+        setTicketTypes(formattedTickets);
         // Initialize quantities
         const initialQtys: Record<string, number> = {};
         ticketsData.forEach(t => initialQtys[t.id] = t.id === 'free' ? 1 : 0);
@@ -351,13 +358,84 @@ export default function App() {
     setLoginForm({ user: '', pass: '' });
   };
 
+  const handleSaveChanges = async () => {
+    if (!supabaseStatus.connected) {
+      alert("No hay conexión con la base de datos para guardar los cambios.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // 1. Save all events
+      const eventUpdates = events.map(e => ({
+        id: e.id,
+        title1: e.title1,
+        title2: e.title2,
+        event_date: e.date,
+        venue: e.venue,
+        price: e.price,
+        banner_image: e.bannerImage,
+        badge: e.badge,
+        date_time: e.dateTime,
+        artists: e.artists,
+        category: e.category,
+        is_visible: e.isVisible,
+        updated_at: new Date().toISOString()
+      }));
+
+      const { error: eventsError } = await supabase
+        .from('events')
+        .upsert(eventUpdates);
+      
+      if (eventsError) throw eventsError;
+
+      // 2. Save settings
+      const settingsToSave = [
+        { id: 'brand', data: brandData },
+        { id: 'yape', data: yapeData },
+        { id: 'seo', data: seoData }
+      ];
+
+      for (const setting of settingsToSave) {
+        const { error } = await supabase
+          .from('site_settings')
+          .upsert({ id: setting.id, data: setting.data, updated_at: new Date().toISOString() });
+        if (error) throw error;
+      }
+
+      // 3. Save ticket types
+      const ticketUpdates = ticketTypes.map(t => ({
+        id: t.id,
+        name: t.name,
+        description: (t as any).desc || t.description, // Handle both local 'desc' and DB 'description'
+        price: t.price
+      }));
+
+      const { error: ticketsError } = await supabase
+        .from('ticket_types')
+        .upsert(ticketUpdates);
+      
+      if (ticketsError) throw ticketsError;
+
+      setHasUnsavedChanges(false);
+      alert("¡Todos los cambios han sido guardados en la base de datos!");
+    } catch (error: any) {
+      console.error('Error saving all changes:', error);
+      const errorMessage = error?.message || "Error desconocido";
+      
+      if (errorMessage.includes('row-level security') || errorMessage.includes('permission denied')) {
+        alert(`Error de Permisos: La base de datos rechazó los cambios. \n\nEsto suele ser por las políticas RLS. Asegúrate de actualizar tus políticas en Supabase para permitir escritura segura.`);
+      } else {
+        alert(`Hubo un error al guardar los cambios: ${errorMessage}`);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const updateField = (field: string, value: string) => {
-    setEvents(prev => {
-      const newEvents = prev.map(e => e.id === currentEventId ? { ...e, [field]: value } : e);
-      const updatedEvent = newEvents.find(e => e.id === currentEventId);
-      if (updatedEvent) saveEvent(currentEventId, updatedEvent);
-      return newEvents;
-    });
+    setEvents(prev => prev.map(e => e.id === currentEventId ? { ...e, [field]: value } : e));
+    setHasUnsavedChanges(true);
   };
 
   const handleAddEvent = async () => {
@@ -428,12 +506,8 @@ export default function App() {
   };
 
   const handleToggleVisibility = (id: number) => {
-    setEvents(prev => {
-      const newEvents = prev.map(e => e.id === id ? { ...e, isVisible: !e.isVisible } : e);
-      const updatedEvent = newEvents.find(e => e.id === id);
-      if (updatedEvent) saveEvent(id, updatedEvent);
-      return newEvents;
-    });
+    setEvents(prev => prev.map(e => e.id === id ? { ...e, isVisible: !e.isVisible } : e));
+    setHasUnsavedChanges(true);
   };
 
   const handleDeleteEvent = async (id: number) => {
@@ -460,38 +534,40 @@ export default function App() {
   };
 
   const updateTicketType = (id: string, field: string, value: string | number) => {
-    setTicketTypes(prev => {
-      const next = prev.map(t => t.id === id ? { ...t, [field]: value } : t);
-      const updated = next.find(t => t.id === id);
-      if (updated) saveTicketType(id, updated);
-      return next;
-    });
+    setTicketTypes(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+    setHasUnsavedChanges(true);
   };
 
   const updateBrand = (field: string, value: string | boolean) => {
     const newData = { ...brandData, [field]: value };
     setBrandData(newData);
-    saveSettings('brand', newData);
+    setHasUnsavedChanges(true);
   };
 
   const updateYape = (field: string, value: string) => {
     const newData = { ...yapeData, [field]: value };
     setYapeData(newData);
-    saveSettings('yape', newData);
+    setHasUnsavedChanges(true);
   };
 
   const updateSeo = (field: string, value: string) => {
     const newData = { ...seoData, [field]: value };
     setSeoData(newData);
-    saveSettings('seo', newData);
+    setHasUnsavedChanges(true);
   };
 
   const handlePurchase = async () => {
+    if (!customerData.name || !customerData.email || !customerData.whatsapp) {
+      alert("Por favor completa tus datos de contacto.");
+      return;
+    }
+
     try {
       const purchaseData = {
         event_id: currentEventId,
-        customer_name: "Cliente Web", // Sería ideal pedir estos datos en un paso previo
-        customer_email: "cliente@ bali.com",
+        customer_name: customerData.name,
+        customer_email: customerData.email,
+        customer_whatsapp: customerData.whatsapp,
         tickets: Object.entries(ticketQuantities)
           .filter(([_, qty]) => (qty as number) > 0)
           .map(([id, qty]) => ({ id, qty, name: ticketTypes.find(t => t.id === id)?.name })),
@@ -1082,8 +1158,32 @@ export default function App() {
                 >
                   Restaurar Evento Original
                 </button>
-                <div className="text-[10px] text-accent uppercase tracking-widest font-black animate-pulse">
-                  Los cambios se aplican en tiempo real
+                <div className="flex items-center gap-6">
+                  {hasUnsavedChanges && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="text-[9px] font-black text-accent uppercase tracking-[0.2em] animate-pulse"
+                    >
+                      Tienes cambios sin guardar
+                    </motion.div>
+                  )}
+                  <button 
+                    onClick={handleSaveChanges}
+                    disabled={!hasUnsavedChanges || isSaving}
+                    className={`flex items-center gap-2 px-8 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+                      hasUnsavedChanges 
+                      ? 'bg-accent text-black shadow-[0_10px_20px_rgba(212,175,55,0.3)] hover:scale-[1.02]' 
+                      : 'bg-white/5 text-white/20 border border-white/5'
+                    }`}
+                  >
+                    {isSaving ? (
+                      <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                    ) : (
+                      <Check size={14} />
+                    )}
+                    {isSaving ? 'Guardando...' : 'Guardar Cambios'}
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -1366,6 +1466,51 @@ export default function App() {
 
                 {/* Body */}
                 <div className="p-8">
+                  {/* Customer Info Form */}
+                  <div className="mb-8 space-y-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-1 h-3 bg-accent rounded-full" />
+                      <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Tus Datos de Contacto</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5 flex flex-col">
+                        <label className="text-[9px] uppercase tracking-widest font-black text-white/30 ml-1">Nombre Completo</label>
+                        <input 
+                          type="text" 
+                          value={customerData.name}
+                          onChange={(e) => setCustomerData(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="Tu nombre completo"
+                          className="w-full bg-white/[0.03] border border-white/5 rounded-xl py-3.5 px-4 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
+                        />
+                      </div>
+                      <div className="space-y-1.5 flex flex-col">
+                        <label className="text-[9px] uppercase tracking-widest font-black text-white/30 ml-1">Email</label>
+                        <input 
+                          type="email" 
+                          value={customerData.email}
+                          onChange={(e) => setCustomerData(prev => ({ ...prev, email: e.target.value }))}
+                          placeholder="tu@email.com"
+                          className="w-full bg-white/[0.03] border border-white/5 rounded-xl py-3.5 px-4 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5 flex flex-col">
+                      <label className="text-[9px] uppercase tracking-widest font-black text-white/30 ml-1">WhatsApp / Celular</label>
+                      <input 
+                        type="tel" 
+                        value={customerData.whatsapp}
+                        onChange={(e) => setCustomerData(prev => ({ ...prev, whatsapp: e.target.value }))}
+                        placeholder="+51 999 888 777"
+                        className="w-full bg-white/[0.03] border border-white/5 rounded-xl py-3.5 px-4 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1 h-3 bg-accent rounded-full" />
+                    <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Selecciona Método de Pago</span>
+                  </div>
+
                   {/* Selector */}
                   <div className="flex gap-4 mb-8">
                     <button 
