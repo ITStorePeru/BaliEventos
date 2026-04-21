@@ -1,20 +1,37 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Bali Events - Plataforma de Venta de Entradas
 
-# Run and deploy your AI Studio app
+Este es un proyecto de venta de entradas premium para eventos, construido con **React + Vite + Tailwind CSS** y **Supabase**.
 
-This contains everything you need to run your app locally.
+## 🚀 Despliegue en Vercel
 
-View your app in AI Studio: https://ai.studio/apps/3dc0d238-097d-4da6-bd37-db655c7008dc
+1.  **Exportar a GitHub**: Usa la opción "Export to GitHub" en AI Studio.
+2.  **Importar en Vercel**: Ve a [vercel.com](https://vercel.com) e importa el repositorio.
+3.  **Configurar Variables de Entorno**: En Vercel, agrega las siguientes variables (basadas en `.env.example`):
+    *   `VITE_SUPABASE_URL`
+    *   `VITE_SUPABASE_ANON_KEY`
+    *   `GEMINI_API_KEY` (Opcional, si usas funciones de IA)
 
-## Run Locally
+## 🗄️ Configuración de Base de Datos (Supabase)
 
-**Prerequisites:**  Node.js
+Para que el panel de administración funcione correctamente, debes ejecutar el script SQL que se encuentra en `supabase_schema.sql` dentro del **SQL Editor** de tu proyecto en Supabase.
 
+Esto creará las siguientes tablas y políticas:
+- `events`: Almacena la información de los eventos.
+- `admin_users`: Gestiona el acceso al panel de administración.
+- `settings`: Configuración de marca y métodos de pago (Yape/QR).
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 🛠️ Desarrollo Local
+
+1.  Instalar dependencias:
+    ```bash
+    npm install
+    ```
+2.  Configurar archivo `.env`:
+    Copia `.env.example` a `.env` y rellena con tus credenciales.
+3.  Ejecutar servidor de desarrollo:
+    ```bash
+    npm run dev
+    ```
+
+---
+*Desarrollado originalmente en Google AI Studio Build.*
