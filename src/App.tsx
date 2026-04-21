@@ -103,6 +103,7 @@ export default function App() {
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'yape'>('yape');
   const [adminTab, setAdminTab] = useState<'brand' | 'event' | 'payment' | 'tickets' | 'events_list' | 'seo'>('events_list');
   const [isLoading, setIsLoading] = useState(true);
+  const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; error: string | null }>({ connected: false, error: null });
   
   // Events Management State
   const [events, setEvents] = useState(INITIAL_EVENTS);
@@ -161,14 +162,20 @@ export default function App() {
 
   const fetchInitialData = async () => {
     setIsLoading(true);
+    setSupabaseStatus({ connected: false, error: null });
     try {
-      // Fetch Events
+      // Test connection and fetch events
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
         .select('*')
         .order('id', { ascending: true });
       
-      if (eventsError) throw eventsError;
+      if (eventsError) {
+        setSupabaseStatus({ connected: false, error: eventsError.message });
+        throw eventsError;
+      }
+      
+      setSupabaseStatus({ connected: true, error: null });
       if (eventsData && eventsData.length > 0) {
         const formattedEvents = eventsData.map(e => ({
           ...e,
@@ -354,6 +361,7 @@ export default function App() {
   };
 
   const handleAddEvent = async () => {
+    const newId = Math.max(0, ...events.map(e => e.id)) + 1;
     const newEventTemplate = {
       title1: "Nuevo",
       title2: "Evento",
@@ -368,27 +376,54 @@ export default function App() {
       is_visible: true
     };
 
-    try {
-      const { data, error } = await supabase
-        .from('events')
-        .insert([newEventTemplate])
-        .select();
+    // UI Feedback immediate
+    const localNewEvent = {
+      ...newEventTemplate,
+      id: newId,
+      bannerImage: newEventTemplate.banner_image,
+      dateTime: newEventTemplate.date_time,
+      date: newEventTemplate.event_date,
+      isVisible: newEventTemplate.is_visible
+    };
 
-      if (error) throw error;
-      if (data) {
-        const createdEvent = {
-          ...data[0],
-          bannerImage: data[0].banner_image,
-          dateTime: data[0].date_time,
-          date: data[0].event_date,
-          isVisible: data[0].is_visible
-        };
-        setEvents([...events, createdEvent]);
-        setCurrentEventId(createdEvent.id);
-        setAdminTab('event');
+    try {
+      if (supabaseStatus.connected) {
+        const { data, error } = await supabase
+          .from('events')
+          .insert([newEventTemplate])
+          .select();
+
+        if (error) throw error;
+        if (data) {
+          const createdEvent = {
+            ...data[0],
+            bannerImage: data[0].banner_image,
+            dateTime: data[0].date_time,
+            date: data[0].event_date,
+            isVisible: data[0].is_visible
+          };
+          setEvents(prev => [...prev, createdEvent]);
+          setCurrentEventId(createdEvent.id);
+          setAdminTab('event');
+          return;
+        }
       }
+      
+      // Fallback for unconnected state or if insert fails but we want to allow demoing
+      setEvents(prev => [...prev, localNewEvent]);
+      setCurrentEventId(newId);
+      setAdminTab('event');
+      if (!supabaseStatus.connected) {
+        console.warn('Evento añadido localmente (DB no conectada)');
+      }
+
     } catch (error) {
       console.error('Error creating event:', error);
+      // Even on error, let the user see the new event locally for the current session
+      setEvents(prev => [...prev, localNewEvent]);
+      setCurrentEventId(newId);
+      setAdminTab('event');
+      alert("Se añadió localmente, pero hubo un error al guardar en la base de datos.");
     }
   };
 
@@ -580,12 +615,24 @@ export default function App() {
                     <p className="text-[10px] text-white/40 uppercase tracking-[0.15em] font-black">Gestiona tu marca, pagos y detalles del evento</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setIsAdminMode(false)}
-                  className="px-6 py-2 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2 group"
-                >
-                  Cerrar Editor
-                </button>
+                
+                {/* Supabase Status Indicator */}
+                <div className="flex items-center gap-4">
+                  <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest ${
+                    supabaseStatus.connected 
+                    ? 'bg-green-500/10 border-green-500/30 text-green-400' 
+                    : 'bg-red-500/10 border-red-500/30 text-red-400'
+                  }`}>
+                    <div className={`w-1.5 h-1.5 rounded-full ${supabaseStatus.connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
+                    {supabaseStatus.connected ? 'DB Conectada' : 'DB Desconectada'}
+                  </div>
+                  <button 
+                    onClick={() => setIsAdminMode(false)}
+                    className="px-6 py-2 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2 group"
+                  >
+                    Cerrar Editor
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-col md:flex-row gap-8 bg-black/20 rounded-[24px] border border-white/5 p-2 overflow-hidden">
@@ -637,6 +684,22 @@ export default function App() {
                       </div>
 
                       <div className="grid grid-cols-1 gap-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
+                        {!supabaseStatus.connected && (
+                          <div className="p-6 bg-red-500/5 border border-red-500/20 rounded-2xl">
+                            <p className="text-red-400 text-xs font-bold uppercase tracking-widest mb-2">Error de conexión</p>
+                            <p className="text-white/40 text-[10px] leading-relaxed">
+                              No se pudo conectar con Supabase. Verifica tus credenciales (URL y Anon Key) en los secretos de AI Studio y asegúrate de haber ejecutado el script SQL en el editor de Supabase.
+                              <br /><br />
+                              Error: {supabaseStatus.error || 'Desconocido'}
+                            </p>
+                            <button 
+                              onClick={fetchInitialData}
+                              className="mt-4 text-accent text-[10px] font-bold uppercase hover:underline"
+                            >
+                              Reintentar conexión
+                            </button>
+                          </div>
+                        )}
                         {events.map((event) => (
                           <div 
                             key={event.id}
