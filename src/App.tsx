@@ -154,7 +154,7 @@ export default function App() {
   });
 
   const [seoData, setSeoData] = useState({
-    title: "Bali - Eventos y Entradas",
+    title: "Bali Club Lima - Eventos y Entradas",
     description: "La plataforma líder en eventos culturales y de entretenimiento en Bali. Compra tus entradas para los mejores festivales, conciertos y rituales.",
     keywords: "bali, eventos, entradas, festivales, conciertos, uluwatu, música, cultura",
     ogImage: "https://picsum.photos/seed/bali-og/1200/630"
