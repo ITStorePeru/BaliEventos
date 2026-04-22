@@ -578,11 +578,24 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  const handleDeleteTicketType = (id: string) => {
+  const handleDeleteTicketType = async (id: string) => {
     if (ticketTypes.length <= 1) {
       alert("Debes tener al menos un tipo de entrada.");
       return;
     }
+    
+    // Si el ID no empieza por 'ticket-', probablemente ya está en la DB
+    if (!id.startsWith('ticket-')) {
+      try {
+        const { error } = await supabase.from('ticket_types').delete().eq('id', id);
+        if (error) throw error;
+      } catch (error) {
+        console.error('Error deleting ticket type from DB:', error);
+        alert("Error al eliminar de la base de datos.");
+        return;
+      }
+    }
+
     setTicketTypes(prev => prev.filter(t => t.id !== id));
     setHasUnsavedChanges(true);
   };
@@ -615,7 +628,16 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  const handleDeleteUser = (id: string | number) => {
+  const handleDeleteUser = async (id: string | number) => {
+    // Si el ID es numérico largo (Timestamp), es local y no está en la DB todavía
+    if (typeof id === 'string' || (typeof id === 'number' && id < 1000000000000)) {
+      try {
+        const { error } = await supabase.from('admin_users').delete().eq('id', id);
+        if (error) throw error;
+      } catch (error) {
+        console.error('Error deleting user from DB:', error);
+      }
+    }
     setAdminUsers(prev => prev.filter(u => u.id !== id));
     setHasUnsavedChanges(true);
   };
