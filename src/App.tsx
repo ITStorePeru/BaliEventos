@@ -104,11 +104,12 @@ export default function App() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'yape'>('yape');
   const [customerData, setCustomerData] = useState({ name: '', email: '', whatsapp: '' });
-  const [adminTab, setAdminTab] = useState<'brand' | 'event' | 'payment' | 'tickets' | 'events_list' | 'seo' | 'users'>('events_list');
+  const [adminTab, setAdminTab] = useState<'brand' | 'event' | 'payment' | 'tickets' | 'events_list' | 'seo' | 'users' | 'orders'>('events_list');
   const [isLoading, setIsLoading] = useState(true);
   const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; error: string | null }>({ connected: false, error: null });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [orders, setOrders] = useState<any[]>([]);
   
   // Events Management State
   const [events, setEvents] = useState(INITIAL_EVENTS);
@@ -234,8 +235,16 @@ export default function App() {
       
       if (!usersError && usersData) {
         setAdminUsers(usersData);
-      } else if (usersError) {
-        console.warn('Could not fetch admin users, might need to run the SQL migration.', usersError);
+      }
+
+      // Fetch Orders
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (!ordersError && ordersData) {
+        setOrders(ordersData);
       }
 
     } catch (error) {
@@ -539,17 +548,23 @@ export default function App() {
 
   const handleDeleteEvent = async (id: number) => {
     if (events.length <= 1) return;
+    if (!confirm("¿Estás seguro de que deseas eliminar este evento permanentemente?")) return;
+    
     try {
-      const { error } = await supabase.from('events').delete().eq('id', id);
-      if (error) throw error;
+      if (supabaseStatus.connected) {
+        const { error } = await supabase.from('events').delete().eq('id', id);
+        if (error) throw error;
+      }
       
       const newEvents = events.filter(e => e.id !== id);
       setEvents(newEvents);
       if (currentEventId === id) {
         setCurrentEventId(newEvents[0].id);
       }
+      setHasUnsavedChanges(true);
     } catch (error) {
       console.error('Error deleting event:', error);
+      alert("Error al eliminar el evento de la base de datos.");
     }
   };
 
@@ -645,6 +660,19 @@ export default function App() {
   const handleUpdateUser = (id: string | number, field: string, value: string) => {
     setAdminUsers(prev => prev.map(u => u.id === id ? { ...u, [field]: value } : u));
     setHasUnsavedChanges(true);
+  };
+
+  const handleDeleteOrder = async (id: string) => {
+    if (!confirm("¿Eliminar este pedido permanentemente?")) return;
+    try {
+      if (supabaseStatus.connected) {
+        const { error } = await supabase.from('orders').delete().eq('id', id);
+        if (error) throw error;
+      }
+      setOrders(prev => prev.filter(o => o.id !== id));
+    } catch (error) {
+      console.error('Error deleting order:', error);
+    }
   };
 
   const handlePurchase = async () => {
@@ -811,6 +839,7 @@ export default function App() {
                     { id: 'brand', label: 'Identidad', icon: Star },
                     { id: 'payment', label: 'Pagos / Yape', icon: Wallet },
                     { id: 'tickets', label: 'Entradas', icon: Ticket },
+                    { id: 'orders', label: 'Ventas / Pedidos', icon: Target },
                     { id: 'users', label: 'Gestión Usuarios', icon: Users },
                     { id: 'seo', label: 'SEO / Meta', icon: Globe },
                   ].map((tab) => (
@@ -1179,6 +1208,74 @@ export default function App() {
                             </button>
                           </motion.div>
                         ))}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {adminTab === 'orders' && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-4 bg-accent rounded-full" />
+                          <span className="text-[10px] font-black text-white uppercase tracking-widest">Listado de Ventas / Pedidos</span>
+                        </div>
+                        <button 
+                          onClick={() => fetchInitialData()}
+                          className="text-[10px] font-bold text-accent hover:underline uppercase tracking-widest"
+                        >
+                          Actualizar Lista
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                        {orders.length === 0 ? (
+                          <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/10">
+                            <Target size={40} className="mx-auto mb-4 opacity-20" />
+                            <p className="text-[11px] uppercase font-black text-white/30 tracking-widest">No hay pedidos registrados todavía</p>
+                          </div>
+                        ) : (
+                          orders.map((order) => (
+                            <motion.div 
+                              key={order.id}
+                              whileHover={{ scale: 1.005, backgroundColor: "rgba(255, 255, 255, 0.08)" }}
+                              className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all"
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[12px] font-bold text-white">{order.customer_name}</span>
+                                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${order.payment_method === 'yape' ? 'bg-[#742284]/20 text-[#742284]' : 'bg-green-500/20 text-green-400'}`}>
+                                    {order.payment_method}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-white/40 flex flex-wrap gap-x-4">
+                                  <span>{order.customer_email}</span>
+                                  <span>{order.customer_whatsapp}</span>
+                                  <span className="text-accent/60">{new Date(order.created_at).toLocaleString()}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-6">
+                                <div className="text-right">
+                                  <div className="text-[12px] font-black text-accent">S/ {order.total_price.toFixed(2)}</div>
+                                  <div className="text-[9px] text-white/40 uppercase font-black">
+                                    {order.tickets.map((t: any) => `${t.qty}x ${t.name}`).join(', ')}
+                                  </div>
+                                </div>
+                                <button 
+                                  onClick={() => handleDeleteOrder(order.id)}
+                                  className="p-2.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                                  title="Eliminar pedido"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            </motion.div>
+                          ))
+                        )}
                       </div>
                     </motion.div>
                   )}
