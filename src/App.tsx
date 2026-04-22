@@ -576,7 +576,9 @@ export default function App() {
   };
 
   const updateTicketType = (id: string, field: string, value: string | number) => {
-    setTicketTypes(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+    // Si el campo es 'name', forzamos mayúsculas
+    const finalValue = field === 'name' && typeof value === 'string' ? value.toUpperCase() : value;
+    setTicketTypes(prev => prev.map(t => t.id === id ? { ...t, [field]: finalValue } : t));
     setHasUnsavedChanges(true);
   };
 
@@ -1552,7 +1554,7 @@ export default function App() {
                             type="text"
                             value={ticket.name}
                             onChange={(e) => updateTicketType(ticket.id, 'name', e.target.value)}
-                            className="bg-white/10 border border-white/20 rounded px-2 py-0.5 text-[14px] font-bold text-white outline-none focus:border-accent"
+                            className="bg-white/10 border border-white/20 rounded px-2 py-0.5 text-[14px] font-bold text-white uppercase outline-none focus:border-accent"
                           />
                           <input 
                             type="text"
@@ -1563,7 +1565,7 @@ export default function App() {
                         </div>
                       ) : (
                         <>
-                          <h4 className="text-[14px] font-bold tracking-tight">{ticket.name}</h4>
+                          <h4 className="text-[14px] font-bold tracking-tight uppercase">{ticket.name}</h4>
                           <p className="text-[10px] text-white/40 mt-0.5">{ticket.desc}</p>
                         </>
                       )}
