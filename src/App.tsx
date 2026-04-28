@@ -1534,7 +1534,14 @@ export default function App() {
                     playsInline
                     preload="auto"
                     className="w-full h-full object-cover"
-                    onPointerEnter={(e) => e.currentTarget.play()}
+                    onLoadedMetadata={(e) => {
+                      // Attempt to play with audio
+                      e.currentTarget.play().catch(() => {
+                        // If blocked, we might need to stay muted until first interaction
+                        // But we keep the state as unmuted so when they click it works
+                        console.log("Autoplay with audio blocked by browser");
+                      });
+                    }}
                   />
                   <div className="absolute bottom-2 right-2 p-1.5 bg-black/60 backdrop-blur-sm rounded-full transition-all group-hover:scale-110">
                     {isVideoMuted ? (
