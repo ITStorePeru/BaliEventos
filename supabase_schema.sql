@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS events (
   venue TEXT,
   price NUMERIC DEFAULT 0,
   banner_image TEXT,
+  video_url TEXT,
   badge TEXT,
   date_time TEXT,
   artists TEXT,

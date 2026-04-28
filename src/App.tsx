@@ -46,7 +46,8 @@ const INITIAL_EVENTS = [
     venue: "Opera de Bali",
     price: 65,
     bannerImage: "https://picsum.photos/seed/opera/1200/800",
-    badge: "Exclusive",
+    videoUrl: "https://itstore.pe/video/BALI_VIDEO.mp4",
+    badge: "EXCLUSIVO",
     dateTime: "Dom 18 Octubre | 07:00 PM - 11:00 PM",
     artists: "Symphonic Orchestra",
     category: "Classic",
@@ -60,7 +61,7 @@ const INITIAL_EVENTS = [
     venue: "The Vault Club",
     price: 40,
     bannerImage: "https://picsum.photos/seed/vault/1200/800",
-    badge: "Underground",
+    badge: "UNDERGROUND",
     dateTime: "Jue 22 Octubre | 11:00 PM - 05:00 AM",
     artists: "Experimental DJs",
     category: "Electronic",
@@ -74,7 +75,7 @@ const INITIAL_EVENTS = [
     venue: "Blue Lagoon",
     price: 55,
     bannerImage: "https://picsum.photos/seed/jazz/1200/800",
-    badge: "Live Music",
+    badge: "MUSICA EN VIVO",
     dateTime: "Jue 05 Noviembre | 06:00 PM - 10:00 PM",
     artists: "The Jazz Quartet",
     category: "Jazz",
@@ -88,7 +89,7 @@ const INITIAL_EVENTS = [
     venue: "Palacio Real",
     price: 150,
     bannerImage: "https://picsum.photos/seed/palace/1200/800",
-    badge: "Luxury",
+    badge: "LUJO",
     dateTime: "Jue 12 Noviembre | 08:00 PM - 02:00 AM",
     artists: "Various Artists",
     category: "Gala",
@@ -188,6 +189,7 @@ export default function App() {
         const formattedEvents = eventsData.map(e => ({
           ...e,
           bannerImage: e.banner_image,
+          videoUrl: e.video_url || "",
           dateTime: e.date_time,
           date: e.event_date,
           isVisible: e.is_visible
@@ -263,6 +265,7 @@ export default function App() {
         venue: updates.venue,
         price: updates.price,
         banner_image: updates.bannerImage,
+        video_url: updates.videoUrl || "",
         badge: updates.badge,
         date_time: updates.dateTime,
         artists: updates.artists,
@@ -403,6 +406,7 @@ export default function App() {
         venue: e.venue,
         price: e.price,
         banner_image: e.bannerImage,
+        video_url: e.videoUrl || "",
         badge: e.badge,
         date_time: e.dateTime,
         artists: e.artists,
@@ -1050,6 +1054,16 @@ export default function App() {
                           />
                         </div>
                         <div className="flex flex-col gap-2">
+                          <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Video Promo (URL MP4)</label>
+                          <input 
+                            type="text" 
+                            value={eventData.videoUrl || ""}
+                            onChange={(e) => updateField('videoUrl', e.target.value)}
+                            className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                            placeholder="https://itstore.pe/video/BALI_VIDEO.mp4"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
                           <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Categoría</label>
                           <input 
                             type="text" 
@@ -1493,7 +1507,27 @@ export default function App() {
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
             </div>
 
-            <div className="relative z-10">
+            <div className="relative z-10 h-full flex flex-col justify-end">
+              {eventData.videoUrl && (
+                <motion.div 
+                  key={eventData.videoUrl} // Forzar re-render al cambiar de video
+                  initial={{ opacity: 0, scale: 0.8, x: 20 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  className="absolute top-4 right-4 w-[130px] md:w-[180px] aspect-[9/16] rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border-2 border-white/20 z-50 bg-black"
+                >
+                  <video 
+                    src={eventData.videoUrl}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="auto"
+                    className="w-full h-full object-cover"
+                    onPointerEnter={(e) => e.currentTarget.play()}
+                  />
+                </motion.div>
+              )}
+
               {isAdminMode && (
                 <motion.div 
                   initial={{ opacity: 0, x: -10 }}
@@ -1504,7 +1538,7 @@ export default function App() {
                   <span className="text-[10px] font-black uppercase tracking-tighter text-accent">Modo Edición Activado</span>
                 </motion.div>
               )}
-              <span className="bg-accent text-black px-3 py-1 rounded-[4px] text-[10px] font-black uppercase mb-4 inline-block tracking-tighter">
+              <span className="bg-accent text-black px-2 py-0.5 rounded text-[10px] font-black uppercase mb-4 w-fit tracking-tighter leading-none">
                 {eventData.badge}
               </span>
               <h1 className="text-4xl md:text-5xl lg:text-7xl font-light leading-[1.1] mb-8 tracking-tight">
@@ -2033,7 +2067,7 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
                   
                   <div className="absolute top-6 left-6 flex flex-col gap-2">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-accent bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-accent/20 w-fit">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-accent bg-black/60 backdrop-blur-md px-2 py-0.5 rounded border border-accent/20 w-fit">
                       {event.badge}
                     </span>
                   </div>
