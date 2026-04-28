@@ -30,7 +30,9 @@ import {
   Wallet,
   Eye,
   EyeOff,
-  Globe
+  Globe,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 
 // Recipes and Design from SKILL.md
@@ -111,6 +113,7 @@ export default function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
+  const [isVideoMuted, setIsVideoMuted] = useState(false);
   
   // Events Management State
   const [events, setEvents] = useState(INITIAL_EVENTS);
@@ -1513,18 +1516,35 @@ export default function App() {
                   key={eventData.videoUrl} // Forzar re-render al cambiar de video
                   initial={{ opacity: 0, scale: 0.8, x: 20 }}
                   animate={{ opacity: 1, scale: 1, x: 0 }}
-                  className="absolute top-4 right-4 w-[130px] md:w-[180px] aspect-[9/16] rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border-2 border-white/20 z-50 bg-black"
+                  className="absolute top-4 right-4 w-[130px] md:w-[180px] aspect-[9/16] rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border-2 border-white/20 z-50 bg-black cursor-pointer group"
+                  onClick={(e) => {
+                    setIsVideoMuted(prev => !prev);
+                  }}
                 >
                   <video 
                     src={eventData.videoUrl}
                     autoPlay
-                    muted
+                    muted={isVideoMuted}
                     loop
                     playsInline
                     preload="auto"
                     className="w-full h-full object-cover"
                     onPointerEnter={(e) => e.currentTarget.play()}
                   />
+                  <div className="absolute bottom-2 right-2 p-1.5 bg-black/60 backdrop-blur-sm rounded-full transition-all group-hover:scale-110">
+                    {isVideoMuted ? (
+                      <VolumeX size={12} className="text-white" />
+                    ) : (
+                      <Volume2 size={12} className="text-white text-accent" />
+                    )}
+                  </div>
+                  {isVideoMuted && (
+                    <div className="absolute inset-x-0 bottom-8 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="bg-black/40 backdrop-blur-md text-[8px] uppercase font-bold text-white px-2 py-1 rounded-full">
+                        Clic para audio
+                      </span>
+                    </div>
+                  )}
                 </motion.div>
               )}
 
@@ -1538,7 +1558,7 @@ export default function App() {
                   <span className="text-[10px] font-black uppercase tracking-tighter text-accent">Modo Edición Activado</span>
                 </motion.div>
               )}
-              <span className="bg-accent text-black px-2 py-0.5 rounded text-[10px] font-black uppercase mb-4 w-fit tracking-tighter leading-none">
+              <span className="bg-accent text-black px-2 py-0.5 rounded text-[10px] font-black uppercase mb-4 self-start tracking-tighter leading-none">
                 {eventData.badge}
               </span>
               <h1 className="text-4xl md:text-5xl lg:text-7xl font-light leading-[1.1] mb-8 tracking-tight">
