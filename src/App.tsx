@@ -32,7 +32,8 @@ import {
   EyeOff,
   Globe,
   Volume2,
-  VolumeX
+  VolumeX,
+  RotateCcw
 } from 'lucide-react';
 
 // Recipes and Design from SKILL.md
@@ -422,7 +423,7 @@ export default function App() {
         .from('events')
         .upsert(eventUpdates);
       
-      if (eventsError) throw eventsError;
+      if (eventsError) throw new Error(`Error en Eventos: ${eventsError.message}`);
 
       // 2. Save settings
       const settingsToSave = [
@@ -435,14 +436,14 @@ export default function App() {
         const { error } = await supabase
           .from('site_settings')
           .upsert({ id: setting.id, data: setting.data, updated_at: new Date().toISOString() });
-        if (error) throw error;
+        if (error) throw new Error(`Error en Configuración (${setting.id}): ${error.message}`);
       }
 
       // 3. Save ticket types
       const ticketUpdates = ticketTypes.map(t => ({
         id: t.id,
         name: t.name,
-        description: (t as any).desc || t.description, // Handle both local 'desc' and DB 'description'
+        description: (t as any).desc || t.description,
         price: t.price
       }));
 
@@ -450,27 +451,22 @@ export default function App() {
         .from('ticket_types')
         .upsert(ticketUpdates);
       
-      if (ticketsError) throw ticketsError;
+      if (ticketsError) throw new Error(`Error en Entradas: ${ticketsError.message}`);
 
       // 4. Save Admin Users
       if (adminUsers.length > 0) {
         const { error: usersError } = await supabase
           .from('admin_users')
           .upsert(adminUsers);
-        if (usersError) throw usersError;
+        if (usersError) throw new Error(`Error en Usuarios: ${usersError.message}`);
       }
 
       setHasUnsavedChanges(false);
-      alert("¡Todos los cambios han sido guardados en la base de datos!");
+      alert("¡Todos los cambios han sido guardados exitosamente!");
     } catch (error: any) {
       console.error('Error saving all changes:', error);
       const errorMessage = error?.message || "Error desconocido";
-      
-      if (errorMessage.includes('row-level security') || errorMessage.includes('permission denied')) {
-        alert(`Error de Permisos: La base de datos rechazó los cambios. \n\nEsto suele ser por las políticas RLS. Asegúrate de actualizar tus políticas en Supabase para permitir escritura segura.`);
-      } else {
-        alert(`Hubo un error al guardar los cambios: ${errorMessage}`);
-      }
+      alert(`Hubo un problema al guardar: ${errorMessage}`);
     } finally {
       setIsSaving(false);
     }
@@ -829,7 +825,15 @@ export default function App() {
                     {supabaseStatus.connected ? 'DB Conectada' : 'DB Desconectada'}
                   </div>
                   <button 
-                    onClick={() => setIsAdminMode(false)}
+                    onClick={() => {
+                      if (hasUnsavedChanges) {
+                        if (confirm("Tienes cambios sin guardar. ¿Estás seguro de que deseas salir?")) {
+                          setIsAdminMode(false);
+                        }
+                      } else {
+                        setIsAdminMode(false);
+                      }
+                    }}
                     className="px-6 py-2 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2 group"
                   >
                     Cerrar Editor
@@ -1449,7 +1453,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-6 border-t border-white/5 mt-6">
+              <div className="sticky bottom-[-16px] left-[-16px] right-[-16px] bg-[#1a1a1a]/80 backdrop-blur-xl border-t border-white/10 p-5 mt-8 flex items-center justify-between z-50 rounded-b-[20px]">
                 <button 
                   onClick={() => {
                     const original = INITIAL_EVENTS.find(e => e.id === currentEventId);
@@ -1457,8 +1461,9 @@ export default function App() {
                       setEvents(prev => prev.map(e => e.id === currentEventId ? { ...original } : e));
                     }
                   }}
-                  className="text-[10px] uppercase tracking-widest font-bold text-white/40 hover:text-white transition-colors"
+                  className="text-[10px] uppercase tracking-widest font-bold text-white/40 hover:text-white transition-colors flex items-center gap-2"
                 >
+                  <RotateCcw size={12} />
                   Restaurar Evento Original
                 </button>
                 <div className="flex items-center gap-6">
@@ -1466,7 +1471,7 @@ export default function App() {
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="text-[9px] font-black text-accent uppercase tracking-[0.2em] animate-pulse"
+                      className="text-[9px] font-black text-accent uppercase tracking-[0.2em] animate-pulse hidden md:block"
                     >
                       Tienes cambios sin guardar
                     </motion.div>
@@ -1474,10 +1479,10 @@ export default function App() {
                   <button 
                     onClick={handleSaveChanges}
                     disabled={!hasUnsavedChanges || isSaving}
-                    className={`flex items-center gap-2 px-8 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+                    className={`flex items-center gap-2 px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
                       hasUnsavedChanges 
-                      ? 'bg-accent text-black shadow-[0_10px_20px_rgba(212,175,55,0.3)] hover:scale-[1.02]' 
-                      : 'bg-white/5 text-white/20 border border-white/5'
+                      ? 'bg-accent text-black shadow-[0_10px_30px_rgba(212,175,55,0.4)] hover:scale-[1.05] active:scale-95' 
+                      : 'bg-white/5 text-white/20 border border-white/5 cursor-not-allowed'
                     }`}
                   >
                     {isSaving ? (
@@ -1485,7 +1490,7 @@ export default function App() {
                     ) : (
                       <Check size={14} />
                     )}
-                    {isSaving ? 'Guardando...' : 'Guardar Cambios'}
+                    {isSaving ? 'Guardando...' : 'Guardar Todos los Cambios'}
                   </button>
                 </div>
               </div>
