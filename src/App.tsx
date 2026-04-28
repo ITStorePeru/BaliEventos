@@ -114,7 +114,7 @@ export default function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
-  const [isVideoMuted, setIsVideoMuted] = useState(false);
+  const [isVideoMuted, setIsVideoMuted] = useState(true);
   
   // Events Management State
   const [events, setEvents] = useState(INITIAL_EVENTS);
