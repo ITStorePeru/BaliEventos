@@ -20,6 +20,14 @@ CREATE TABLE IF NOT EXISTS events (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Asegurar que la columna video_url exista si la tabla fue creada previamente
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='events' AND column_name='video_url') THEN
+        ALTER TABLE events ADD COLUMN video_url TEXT;
+    END IF;
+END $$;
+
 -- 2. Tabla de Tipos de Entradas (Globales o por defecto)
 CREATE TABLE IF NOT EXISTS ticket_types (
   id TEXT PRIMARY KEY,
@@ -65,6 +73,18 @@ ALTER TABLE site_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 
+-- Limpiar políticas existentes para evitar errores 42710
+DROP POLICY IF EXISTS "Lectura pública de eventos" ON events;
+DROP POLICY IF EXISTS "Lectura pública de tipos de tickets" ON ticket_types;
+DROP POLICY IF EXISTS "Lectura pública para configuración" ON site_settings;
+DROP POLICY IF EXISTS "Inserción pública de pedidos" ON orders;
+DROP POLICY IF EXISTS "Escritura permitida para admin panel" ON events;
+DROP POLICY IF EXISTS "Escritura permitida para admin panel tickets" ON ticket_types;
+DROP POLICY IF EXISTS "Escritura permitida para admin panel settings" ON site_settings;
+DROP POLICY IF EXISTS "Escritura permitida para admin panel orders" ON orders;
+DROP POLICY IF EXISTS "Lectura pública de administradores" ON admin_users;
+DROP POLICY IF EXISTS "Escritura de administradores" ON admin_users;
+
 -- Políticas de Acceso (Lectura Pública)
 CREATE POLICY "Lectura pública de eventos" ON events FOR SELECT USING (true);
 CREATE POLICY "Lectura pública de tipos de tickets" ON ticket_types FOR SELECT USING (true);
@@ -86,15 +106,35 @@ INSERT INTO ticket_types (id, name, description, price) VALUES
 ('free', 'FREEPASS', 'Acceso básico', 0),
 ('super-vip', 'SUPER VIP', 'Acceso premium exclusivo', 70),
 ('vip', 'VIP', 'Acceso preferencial', 50)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET 
+  name = EXCLUDED.name, 
+  description = EXCLUDED.description, 
+  price = EXCLUDED.price;
 
 INSERT INTO site_settings (id, data) VALUES
 ('brand', '{"name": "Bali", "logoUrl": "https://i.ibb.co/XZZMPkyL/logo.png", "useLogo": true}'),
 ('yape', '{"number": "999 000 111", "holder": "BALI EVENTOS SAC", "qrUrl": ""}'),
 ('seo', '{"title": "Bali - Eventos y Entradas", "description": "La plataforma líder en eventos culturales y de entretenimiento en Bali.", "keywords": "bali, eventos, entradas", "ogImage": ""}')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data;
 
-INSERT INTO events (title1, title2, event_date, venue, price, banner_image, badge, date_time, artists, category, is_visible) VALUES
-('Neo Classic', 'Night', '18 OCT 2026', 'Opera de Bali', 65, 'https://picsum.photos/seed/opera/1200/800', 'Exclusive', 'Dom 18 Octubre | 07:00 PM - 11:00 PM', 'Symphonic Orchestra', 'Classic', true),
-('Underground', 'Series', '22 OCT 2026', 'The Vault Club', 40, 'https://picsum.photos/seed/vault/1200/800', 'Underground', 'Jue 22 Octubre | 11:00 PM - 05:00 AM', 'Experimental DJs', 'Electronic', true)
-ON CONFLICT DO NOTHING;
+INSERT INTO events (id, title1, title2, event_date, venue, price, banner_image, video_url, badge, date_time, artists, category, is_visible) VALUES
+(1, 'Neo Classic', 'Night', '18 OCT 2026', 'Opera de Bali', 65, 'https://picsum.photos/seed/opera/1200/800', 'https://itstore.pe/video/BALI_VIDEO.mp4', 'EXCLUSIVO', 'Dom 18 Octubre | 07:00 PM - 11:00 PM', 'Symphonic Orchestra', 'Classic', true),
+(2, 'Underground', 'Series', '22 OCT 2026', 'The Vault Club', 40, 'https://picsum.photos/seed/vault/1200/800', '', 'UNDERGROUND', 'Jue 22 Octubre | 11:00 PM - 05:00 AM', 'Experimental DJs', 'Electronic', true),
+(3, 'Jazz on', 'the Beach', '05 NOV 2026', 'Blue Lagoon', 55, 'https://picsum.photos/seed/jazz/1200/800', '', 'MUSICA EN VIVO', 'Jue 05 Noviembre | 06:00 PM - 10:00 PM', 'The Jazz Quartet', 'Jazz', true),
+(4, 'Winter', 'Gala 2026', '12 NOV 2026', 'Palacio Real', 150, 'https://picsum.photos/seed/palace/1200/800', '', 'LUJO', 'Jue 12 Noviembre | 08:00 PM - 02:00 AM', 'Various Artists', 'Gala', true)
+ON CONFLICT (id) DO UPDATE SET 
+  title1 = EXCLUDED.title1,
+  title2 = EXCLUDED.title2,
+  event_date = EXCLUDED.event_date,
+  venue = EXCLUDED.venue,
+  price = EXCLUDED.price,
+  banner_image = EXCLUDED.banner_image,
+  video_url = EXCLUDED.video_url,
+  badge = EXCLUDED.badge,
+  date_time = EXCLUDED.date_time,
+  artists = EXCLUDED.artists,
+  category = EXCLUDED.category,
+  is_visible = EXCLUDED.is_visible;
+
+-- Sincronizar la secuencia de IDs
+SELECT setval('events_id_seq', (SELECT MAX(id) FROM events));
