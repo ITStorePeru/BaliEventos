@@ -1119,24 +1119,8 @@ _Por favor, confírmame la disponibilidad de las entradas para proceder con el p
                   </div>
                 </div>
                 
-                {/* Supabase Status Indicator */}
-                <div className="flex items-center gap-2 md:gap-4">
-                  <button
-                    onClick={testSupabaseConnection}
-                    disabled={isTestingConnection}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 transition-all text-[10px] font-bold uppercase tracking-widest text-accent disabled:opacity-50 cursor-pointer"
-                  >
-                    <RefreshCw size={10} className={isTestingConnection ? "animate-spin" : ""} />
-                    {isTestingConnection ? "Probando..." : "Probar Conexión"}
-                  </button>
-                  <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest ${
-                    supabaseStatus.connected 
-                    ? 'bg-green-500/10 border-green-500/30 text-green-400' 
-                    : 'bg-red-500/10 border-red-500/30 text-red-400'
-                  }`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${supabaseStatus.connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
-                    {supabaseStatus.connected ? 'DB Conectada' : 'DB Desconectada'}
-                  </div>
+                {/* Cerrar Editor */}
+                <div className="flex items-center gap-2">
                   <button 
                     onClick={() => {
                       if (hasUnsavedChanges) {
@@ -1147,7 +1131,7 @@ _Por favor, confírmame la disponibilidad de las entradas para proceder con el p
                         setIsAdminMode(false);
                       }
                     }}
-                    className="px-6 py-2 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2 group"
+                    className="px-6 py-2 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2 group cursor-pointer"
                   >
                     Cerrar Editor
                   </button>
