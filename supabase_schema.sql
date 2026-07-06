@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS events (
   artists TEXT,
   category TEXT,
   is_visible BOOLEAN DEFAULT true,
+  whatsapp_number TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -25,6 +26,14 @@ DO $$
 BEGIN 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='events' AND column_name='video_url') THEN
         ALTER TABLE events ADD COLUMN video_url TEXT;
+    END IF;
+END $$;
+
+-- Asegurar que la columna whatsapp_number exista si la tabla fue creada previamente
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='events' AND column_name='whatsapp_number') THEN
+        ALTER TABLE events ADD COLUMN whatsapp_number TEXT;
     END IF;
 END $$;
 
@@ -114,14 +123,15 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO site_settings (id, data) VALUES
 ('brand', '{"name": "Bali", "logoUrl": "https://i.ibb.co/XZZMPkyL/logo.png", "useLogo": true}'),
 ('yape', '{"number": "999 000 111", "holder": "BALI EVENTOS SAC", "qrUrl": ""}'),
-('seo', '{"title": "Bali - Eventos y Entradas", "description": "La plataforma líder en eventos culturales y de entretenimiento en Bali.", "keywords": "bali, eventos, entradas", "ogImage": ""}')
+('seo', '{"title": "Bali - Eventos y Entradas", "description": "La plataforma líder en eventos culturales y de entretenimiento en Bali.", "keywords": "bali, eventos, entradas", "ogImage": ""}'),
+('cloudinary', '{"cloudName": "", "uploadPreset": ""}')
 ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data;
 
-INSERT INTO events (id, title1, title2, event_date, venue, price, banner_image, video_url, badge, date_time, artists, category, is_visible) VALUES
-(1, 'Neo Classic', 'Night', '18 OCT 2026', 'Opera de Bali', 65, 'https://picsum.photos/seed/opera/1200/800', 'https://itstore.pe/video/BALI_VIDEO.mp4', 'EXCLUSIVO', 'Dom 18 Octubre | 07:00 PM - 11:00 PM', 'Symphonic Orchestra', 'Classic', true),
-(2, 'Underground', 'Series', '22 OCT 2026', 'The Vault Club', 40, 'https://picsum.photos/seed/vault/1200/800', '', 'UNDERGROUND', 'Jue 22 Octubre | 11:00 PM - 05:00 AM', 'Experimental DJs', 'Electronic', true),
-(3, 'Jazz on', 'the Beach', '05 NOV 2026', 'Blue Lagoon', 55, 'https://picsum.photos/seed/jazz/1200/800', '', 'MUSICA EN VIVO', 'Jue 05 Noviembre | 06:00 PM - 10:00 PM', 'The Jazz Quartet', 'Jazz', true),
-(4, 'Winter', 'Gala 2026', '12 NOV 2026', 'Palacio Real', 150, 'https://picsum.photos/seed/palace/1200/800', '', 'LUJO', 'Jue 12 Noviembre | 08:00 PM - 02:00 AM', 'Various Artists', 'Gala', true)
+INSERT INTO events (id, title1, title2, event_date, venue, price, banner_image, video_url, badge, date_time, artists, category, is_visible, whatsapp_number) VALUES
+(1, 'Neo Classic', 'Night', '18 OCT 2026', 'Opera de Bali', 65, 'https://picsum.photos/seed/opera/1200/800', 'https://itstore.pe/video/BALI_VIDEO.mp4', 'EXCLUSIVO', 'Dom 18 Octubre | 07:00 PM - 11:00 PM', 'Symphonic Orchestra', 'Classic', true, '51999000111'),
+(2, 'Underground', 'Series', '22 OCT 2026', 'The Vault Club', 40, 'https://picsum.photos/seed/vault/1200/800', '', 'UNDERGROUND', 'Jue 22 Octubre | 11:00 PM - 05:00 AM', 'Experimental DJs', 'Electronic', true, '51999000111'),
+(3, 'Jazz on', 'the Beach', '05 NOV 2026', 'Blue Lagoon', 55, 'https://picsum.photos/seed/jazz/1200/800', '', 'MUSICA EN VIVO', 'Jue 05 Noviembre | 06:00 PM - 10:00 PM', 'The Jazz Quartet', 'Jazz', true, '51999000111'),
+(4, 'Winter', 'Gala 2026', '12 NOV 2026', 'Palacio Real', 150, 'https://picsum.photos/seed/palace/1200/800', '', 'LUJO', 'Jue 12 Noviembre | 08:00 PM - 02:00 AM', 'Various Artists', 'Gala', true, '51999000111')
 ON CONFLICT (id) DO UPDATE SET 
   title1 = EXCLUDED.title1,
   title2 = EXCLUDED.title2,
@@ -134,7 +144,8 @@ ON CONFLICT (id) DO UPDATE SET
   date_time = EXCLUDED.date_time,
   artists = EXCLUDED.artists,
   category = EXCLUDED.category,
-  is_visible = EXCLUDED.is_visible;
+  is_visible = EXCLUDED.is_visible,
+  whatsapp_number = EXCLUDED.whatsapp_number;
 
 -- Sincronizar la secuencia de IDs
 SELECT setval('events_id_seq', (SELECT MAX(id) FROM events));

@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from './lib/supabase';
+import { UploadModal } from './components/UploadModal';
 import { 
   Calendar, 
   MapPin, 
@@ -31,9 +32,11 @@ import {
   Eye,
   EyeOff,
   Globe,
-  Volume2,
-  VolumeX,
-  RotateCcw
+  RotateCcw,
+  Upload,
+  MessageSquare,
+  Phone,
+  RefreshCw
 } from 'lucide-react';
 
 // Recipes and Design from SKILL.md
@@ -54,7 +57,8 @@ const INITIAL_EVENTS = [
     dateTime: "Dom 18 Octubre | 07:00 PM - 11:00 PM",
     artists: "Symphonic Orchestra",
     category: "Classic",
-    isVisible: true
+    isVisible: true,
+    whatsappNumber: "51999000111"
   },
   {
     id: 2,
@@ -68,7 +72,8 @@ const INITIAL_EVENTS = [
     dateTime: "Jue 22 Octubre | 11:00 PM - 05:00 AM",
     artists: "Experimental DJs",
     category: "Electronic",
-    isVisible: true
+    isVisible: true,
+    whatsappNumber: "51999000111"
   },
   {
     id: 3,
@@ -82,7 +87,8 @@ const INITIAL_EVENTS = [
     dateTime: "Jue 05 Noviembre | 06:00 PM - 10:00 PM",
     artists: "The Jazz Quartet",
     category: "Jazz",
-    isVisible: true
+    isVisible: true,
+    whatsappNumber: "51999000111"
   },
   {
     id: 4,
@@ -96,7 +102,8 @@ const INITIAL_EVENTS = [
     dateTime: "Jue 12 Noviembre | 08:00 PM - 02:00 AM",
     artists: "Various Artists",
     category: "Gala",
-    isVisible: true
+    isVisible: true,
+    whatsappNumber: "51999000111"
   }
 ];
 
@@ -114,7 +121,7 @@ export default function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
-  const [isVideoMuted, setIsVideoMuted] = useState(true);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
   
   // Events Management State
   const [events, setEvents] = useState(INITIAL_EVENTS);
@@ -156,7 +163,8 @@ export default function App() {
   const [yapeData, setYapeData] = useState({
     number: "999 000 111",
     holder: "BALI EVENTOS SAC",
-    qrUrl: ""
+    qrUrl: "",
+    whatsappNumber: "51999000111"
   });
 
   const [seoData, setSeoData] = useState({
@@ -168,6 +176,118 @@ export default function App() {
 
   const [adminUsers, setAdminUsers] = useState<{ id: string | number; username: string; password?: string }[]>([]);
 
+  const [cloudinaryData, setCloudinaryData] = useState({
+    cloudName: "",
+    apiKey: "",
+    uploadPreset: ""
+  });
+
+  const [isUploading, setIsUploading] = useState<Record<string, boolean>>({});
+
+  interface ActiveUpload {
+    fieldKey: string;
+    onUploadSuccess: (url: string) => void;
+    title: string;
+    aspectRatioRef?: string;
+  }
+
+  const [activeUploadModal, setActiveUploadModal] = useState<ActiveUpload | null>(null);
+
+  const saveUploadedImageToDatabase = async (url: string, fieldKey: string) => {
+    setHasUnsavedChanges(true);
+    if (supabaseStatus.connected) {
+      try {
+        if (fieldKey === 'logoUrl') {
+          const updatedBrand = { ...brandData, logoUrl: url };
+          await saveSettings('brand', updatedBrand);
+        } else if (fieldKey === 'bannerImage') {
+          const currentEvent = events.find(ev => ev.id === currentEventId);
+          if (currentEvent) {
+            const updatedEvent = { ...currentEvent, bannerImage: url };
+            await saveEvent(currentEventId, updatedEvent);
+          }
+        } else if (fieldKey === 'qrUrl') {
+          const updatedYape = { ...yapeData, qrUrl: url };
+          await saveSettings('yape', updatedYape);
+        } else if (fieldKey === 'ogImage') {
+          const updatedSeo = { ...seoData, ogImage: url };
+          await saveSettings('seo', updatedSeo);
+        }
+      } catch (dbErr: any) {
+        console.error("Error al guardar imagen en Supabase automáticamente:", dbErr);
+      }
+    }
+  };
+
+  const handleCloudinaryUpload = async (e: React.ChangeEvent<HTMLInputElement>, onUploadSuccess: (url: string) => void, fieldKey: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!cloudinaryData.cloudName || !cloudinaryData.uploadPreset) {
+      alert("Por favor configure su Cloud Name y Upload Preset de Cloudinary en la pestaña 'Cloudinary' primero.");
+      return;
+    }
+
+    setIsUploading(prev => ({ ...prev, [fieldKey]: true }));
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", cloudinaryData.uploadPreset);
+      if (cloudinaryData.apiKey) {
+        formData.append("api_key", cloudinaryData.apiKey);
+      }
+
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudinaryData.cloudName}/image/upload`, {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error?.message || "Error al subir la imagen");
+      }
+
+      const uploadData = await res.json();
+      if (uploadData.secure_url) {
+        onUploadSuccess(uploadData.secure_url);
+        setHasUnsavedChanges(true);
+
+        // Guardado automático en Supabase de forma inmediata si está conectado
+        if (supabaseStatus.connected) {
+          try {
+            if (fieldKey === 'logoUrl') {
+              const updatedBrand = { ...brandData, logoUrl: uploadData.secure_url };
+              await saveSettings('brand', updatedBrand);
+            } else if (fieldKey === 'bannerImage') {
+              const currentEvent = events.find(ev => ev.id === currentEventId);
+              if (currentEvent) {
+                const updatedEvent = { ...currentEvent, bannerImage: uploadData.secure_url };
+                await saveEvent(currentEventId, updatedEvent);
+              }
+            } else if (fieldKey === 'qrUrl') {
+              const updatedYape = { ...yapeData, qrUrl: uploadData.secure_url };
+              await saveSettings('yape', updatedYape);
+            } else if (fieldKey === 'ogImage') {
+              const updatedSeo = { ...seoData, ogImage: uploadData.secure_url };
+              await saveSettings('seo', updatedSeo);
+            }
+          } catch (dbErr: any) {
+            console.error("Error al guardar imagen en Supabase automáticamente:", dbErr);
+          }
+        }
+
+        alert("¡Imagen subida exitosamente a Cloudinary y guardada de inmediato!");
+      } else {
+        throw new Error("No se obtuvo la URL de la imagen");
+      }
+    } catch (err: any) {
+      console.error("Cloudinary upload error:", err);
+      alert(`Error al subir la imagen: ${err.message || err}`);
+    } finally {
+      setIsUploading(prev => ({ ...prev, [fieldKey]: false }));
+    }
+  };
+
   // SEO Effect
   useEffect(() => {
     fetchInitialData();
@@ -175,88 +295,124 @@ export default function App() {
 
   const fetchInitialData = async () => {
     setIsLoading(true);
-    setSupabaseStatus({ connected: false, error: null });
+    let isConnected = true;
+    let connectionError: string | null = null;
+
     try {
-      // Test connection and fetch events
-      const { data: eventsData, error: eventsError } = await supabase
-        .from('events')
-        .select('*')
-        .order('id', { ascending: true });
-      
-      if (eventsError) {
-        setSupabaseStatus({ connected: false, error: eventsError.message });
-        throw eventsError;
-      }
-      
-      setSupabaseStatus({ connected: true, error: null });
-      if (eventsData && eventsData.length > 0) {
-        const formattedEvents = eventsData.map(e => ({
+      // Fetch everything in parallel to reduce loading delays significantly!
+      const [
+        eventsRes,
+        ticketsRes,
+        settingsRes,
+        usersRes,
+        ordersRes
+      ] = await Promise.all([
+        supabase.from('events').select('*').order('id', { ascending: true }),
+        supabase.from('ticket_types').select('*'),
+        supabase.from('site_settings').select('*'),
+        supabase.from('admin_users').select('*'),
+        supabase.from('orders').select('*').order('created_at', { ascending: false })
+      ]);
+
+      // 1. Process Events
+      if (eventsRes.error) {
+        console.warn("Supabase Events table fetch error:", eventsRes.error.message);
+        isConnected = false;
+        connectionError = eventsRes.error.message;
+      } else if (eventsRes.data && eventsRes.data.length > 0) {
+        const formattedEvents = eventsRes.data.map(e => ({
           ...e,
           bannerImage: e.banner_image,
           videoUrl: e.video_url || "",
           dateTime: e.date_time,
           date: e.event_date,
-          isVisible: e.is_visible
+          isVisible: e.is_visible,
+          whatsappNumber: e.whatsapp_number || "51999000111"
         }));
         setEvents(formattedEvents);
         setCurrentEventId(formattedEvents[0].id);
       }
 
-      // Fetch Ticket Types
-      const { data: ticketsData, error: ticketsError } = await supabase
-        .from('ticket_types')
-        .select('*');
-      
-      if (ticketsError) throw ticketsError;
-      if (ticketsData && ticketsData.length > 0) {
-        const formattedTickets = ticketsData.map(t => ({
+      // 2. Process Ticket Types
+      if (ticketsRes.error) {
+        console.warn("Supabase Ticket Types table fetch error:", ticketsRes.error.message);
+      } else if (ticketsRes.data && ticketsRes.data.length > 0) {
+        const formattedTickets = ticketsRes.data.map(t => ({
           ...t,
           desc: t.description || ''
         }));
         setTicketTypes(formattedTickets);
         // Initialize quantities
         const initialQtys: Record<string, number> = {};
-        ticketsData.forEach(t => initialQtys[t.id] = t.id === 'free' ? 1 : 0);
+        ticketsRes.data.forEach(t => initialQtys[t.id] = t.id === 'free' ? 1 : 0);
         setTicketQuantities(initialQtys);
       }
 
-      // Fetch Settings
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('site_settings')
-        .select('*');
-      
-      if (settingsError) throw settingsError;
-      if (settingsData) {
-        settingsData.forEach(setting => {
-          if (setting.id === 'brand') setBrandData(setting.data);
-          if (setting.id === 'yape') setYapeData(setting.data);
-          if (setting.id === 'seo') setSeoData(setting.data);
+      // 3. Process Settings
+      if (settingsRes.error) {
+        console.warn("Supabase Site Settings table fetch error:", settingsRes.error.message);
+      } else if (settingsRes.data) {
+        settingsRes.data.forEach(setting => {
+          if (setting.id === 'brand' && setting.data) setBrandData(setting.data);
+          if (setting.id === 'yape' && setting.data) {
+            setYapeData({
+              number: setting.data.number || "999 000 111",
+              holder: setting.data.holder || "BALI EVENTOS SAC",
+              qrUrl: setting.data.qrUrl || "",
+              whatsappNumber: setting.data.whatsappNumber || "51999000111"
+            });
+          }
+          if (setting.id === 'seo' && setting.data) setSeoData(setting.data);
+          if (setting.id === 'cloudinary' && setting.data) {
+            setCloudinaryData({
+              cloudName: setting.data.cloudName || "",
+              apiKey: setting.data.apiKey || "",
+              uploadPreset: setting.data.uploadPreset || ""
+            });
+          }
         });
       }
 
-      // Fetch Admin Users
-      const { data: usersData, error: usersError } = await supabase
-        .from('admin_users')
-        .select('*');
-      
-      if (!usersError && usersData) {
-        setAdminUsers(usersData);
+      // 4. Process Admin Users
+      if (usersRes.error) {
+        console.warn("Supabase Admin Users table fetch error:", usersRes.error.message);
+      } else if (usersRes.data && usersRes.data.length > 0) {
+        setAdminUsers(usersRes.data);
       }
 
-      // Fetch Orders
-      const { data: ordersData, error: ordersError } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (!ordersError && ordersData) {
-        setOrders(ordersData);
+      // 5. Process Orders
+      if (ordersRes.error) {
+        console.warn("Supabase Orders table fetch error:", ordersRes.error.message);
+      } else if (ordersRes.data) {
+        setOrders(ordersRes.data);
       }
 
-    } catch (error) {
-      console.error('Error fetching data from Supabase:', error);
+      setSupabaseStatus({ connected: isConnected, error: connectionError });
+    } catch (error: any) {
+      console.error('Unhandled error during initial data load:', error);
+      setSupabaseStatus({ connected: false, error: String(error) });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const testSupabaseConnection = async () => {
+    setIsTestingConnection(true);
+    try {
+      const { data, error } = await supabase.from('site_settings').select('*').limit(1);
+      if (error) {
+        setSupabaseStatus({ connected: false, error: error.message });
+        alert(`❌ Error al conectar con Supabase: ${error.message}`);
+      } else {
+        setSupabaseStatus({ connected: true, error: null });
+        alert("✅ ¡Conexión con Supabase exitosa! Las credenciales de tu base de datos son correctas y los datos se cargaron correctamente.");
+        fetchInitialData(); // Refrescar los datos de paso
+      }
+    } catch (err: any) {
+      setSupabaseStatus({ connected: false, error: err.message || String(err) });
+      alert(`❌ Error al conectar con Supabase: ${err.message || String(err)}`);
+    } finally {
+      setIsTestingConnection(false);
     }
   };
 
@@ -275,6 +431,7 @@ export default function App() {
         artists: updates.artists,
         category: updates.category,
         is_visible: updates.isVisible,
+        whatsapp_number: updates.whatsappNumber || "51999000111",
         updated_at: new Date().toISOString()
       };
 
@@ -416,6 +573,7 @@ export default function App() {
         artists: e.artists,
         category: e.category,
         is_visible: e.isVisible,
+        whatsapp_number: e.whatsappNumber || "51999000111",
         updated_at: new Date().toISOString()
       }));
 
@@ -429,7 +587,8 @@ export default function App() {
       const settingsToSave = [
         { id: 'brand', data: brandData },
         { id: 'yape', data: yapeData },
-        { id: 'seo', data: seoData }
+        { id: 'seo', data: seoData },
+        { id: 'cloudinary', data: cloudinaryData }
       ];
 
       for (const setting of settingsToSave) {
@@ -490,7 +649,8 @@ export default function App() {
       date_time: "Sáb 1 Enero | 08:00 PM",
       artists: "Artistas por confirmar",
       category: "General",
-      is_visible: true
+      is_visible: true,
+      whatsapp_number: "51999000111"
     };
 
     // UI Feedback immediate
@@ -500,7 +660,8 @@ export default function App() {
       bannerImage: newEventTemplate.banner_image,
       dateTime: newEventTemplate.date_time,
       date: newEventTemplate.event_date,
-      isVisible: newEventTemplate.is_visible
+      isVisible: newEventTemplate.is_visible,
+      whatsappNumber: newEventTemplate.whatsapp_number
     };
 
     try {
@@ -517,7 +678,8 @@ export default function App() {
             bannerImage: data[0].banner_image,
             dateTime: data[0].date_time,
             date: data[0].event_date,
-            isVisible: data[0].is_visible
+            isVisible: data[0].is_visible,
+            whatsappNumber: data[0].whatsapp_number || "51999000111"
           };
           setEvents(prev => [...prev, createdEvent]);
           setCurrentEventId(createdEvent.id);
@@ -718,6 +880,92 @@ export default function App() {
     }
   };
 
+  const getEventWhatsAppNumber = (event: any) => {
+    if (event?.whatsappNumber) {
+      return event.whatsappNumber.replace(/\s+/g, '');
+    }
+    if (yapeData?.whatsappNumber) {
+      return yapeData.whatsappNumber.replace(/\s+/g, '');
+    }
+    if (yapeData?.number) {
+      return yapeData.number.replace(/\s+/g, '');
+    }
+    return "51999000111";
+  };
+
+  const handleWhatsAppPurchase = async () => {
+    try {
+      const selectedTickets = Object.entries(ticketQuantities)
+        .filter(([_, qty]) => (qty as number) > 0)
+        .map(([id, qty]) => ({ 
+          id, 
+          qty: qty as number, 
+          name: ticketTypes.find(t => t.id === id)?.name || id 
+        }));
+
+      const purchaseData = {
+        event_id: currentEventId,
+        customer_name: "Cliente de WhatsApp",
+        customer_email: "",
+        customer_whatsapp: "",
+        tickets: selectedTickets,
+        total_price: totalPrice,
+        payment_method: 'whatsapp',
+        payment_status: 'pending'
+      };
+
+      if (supabaseStatus.connected) {
+        const { error } = await supabase
+          .from('orders')
+          .insert([purchaseData]);
+        if (error) {
+          console.error('Error saving order to DB:', error);
+        }
+      }
+
+      const eventNum = getEventWhatsAppNumber(eventData);
+      const ticketsStr = selectedTickets
+        .map(t => `• *${t.qty}x ${t.name}* (S/ ${((ticketTypes.find(tk => tk.id === t.id)?.price || 0) * t.qty).toFixed(2)})`)
+        .join('\n');
+
+      const messageText = `¡Hola! Quisiera realizar una compra para el evento: *${eventData.title1} ${eventData.title2}*
+
+*Entradas Seleccionadas:*
+${ticketsStr}
+
+*Total a Pagar:* S/ ${totalPrice.toFixed(2)}
+
+_Por favor, confírmame la disponibilidad de las entradas para proceder con el pago y recibir mis entradas._`;
+
+      const encodedMessage = encodeURIComponent(messageText);
+      const whatsappUrl = `https://wa.me/${eventNum}?text=${encodedMessage}`;
+
+      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+
+      alert("¡Pedido registrado! Te estamos redirigiendo a WhatsApp para finalizar tu compra.");
+      setIsPaymentModalOpen(false);
+
+      // Reset quantities
+      const resetQtys: Record<string, number> = {};
+      ticketTypes.forEach(t => resetQtys[t.id] = 0);
+      setTicketQuantities(resetQtys);
+
+      // Refresh orders for admin panel
+      if (supabaseStatus.connected) {
+        const { data: ordersData } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (ordersData) {
+          setOrders(ordersData);
+        }
+      }
+    } catch (error) {
+      console.error('Error in WhatsApp checkout:', error);
+      alert("Hubo un error al procesar tu pedido. Intenta de nuevo.");
+    }
+  };
+
   const totalTickets = (Object.values(ticketQuantities) as number[]).reduce((a: number, b: number) => a + b, 0);
   const totalPrice = Object.entries(ticketQuantities).reduce((acc: number, [id, qty]) => {
     const ticket = ticketTypes.find(t => t.id === id);
@@ -729,7 +977,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
         <div className="w-16 h-16 border-4 border-accent/20 border-t-accent rounded-full animate-spin" />
-        <div className="text-accent text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">Cargando Bali Premium...</div>
+        <div className="text-accent text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">Cargando Bali Eventos...</div>
       </div>
     );
   }
@@ -815,7 +1063,15 @@ export default function App() {
                 </div>
                 
                 {/* Supabase Status Indicator */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 md:gap-4">
+                  <button
+                    onClick={testSupabaseConnection}
+                    disabled={isTestingConnection}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 transition-all text-[10px] font-bold uppercase tracking-widest text-accent disabled:opacity-50 cursor-pointer"
+                  >
+                    <RefreshCw size={10} className={isTestingConnection ? "animate-spin" : ""} />
+                    {isTestingConnection ? "Probando..." : "Probar Conexión"}
+                  </button>
                   <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest ${
                     supabaseStatus.connected 
                     ? 'bg-green-500/10 border-green-500/30 text-green-400' 
@@ -848,11 +1104,12 @@ export default function App() {
                     { id: 'events_list', label: 'Gestión Eventos', icon: Calendar },
                     { id: 'event', label: 'Editor Detalle', icon: ImageIcon },
                     { id: 'brand', label: 'Identidad', icon: Star },
-                    { id: 'payment', label: 'Pagos / Yape', icon: Wallet },
+                    { id: 'payment', label: 'Contacto WhatsApp', icon: MessageSquare },
                     { id: 'tickets', label: 'Entradas', icon: Ticket },
                     { id: 'orders', label: 'Ventas / Pedidos', icon: Target },
                     { id: 'users', label: 'Gestión Usuarios', icon: Users },
                     { id: 'seo', label: 'SEO / Meta', icon: Globe },
+                    { id: 'cloudinary', label: 'Cloudinary', icon: Upload },
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -996,13 +1253,50 @@ export default function App() {
                               </button>
                             </div>
                           </div>
-                          <input 
-                            type="text" 
-                            value={brandData.logoUrl}
-                            onChange={(e) => updateBrand('logoUrl', e.target.value)}
-                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all placeholder:text-white/10"
-                            placeholder="https://tu-logo.com/imagen.png"
-                          />
+                          <div className="flex gap-2 items-center">
+                            <input 
+                              type="text" 
+                              value={brandData.logoUrl}
+                              onChange={(e) => updateBrand('logoUrl', e.target.value)}
+                              className="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all placeholder:text-white/10"
+                              placeholder="https://tu-logo.com/imagen.png"
+                            />
+                            <button 
+                              type="button"
+                              onClick={() => setActiveUploadModal({
+                                fieldKey: 'logoUrl',
+                                onUploadSuccess: (url) => updateBrand('logoUrl', url),
+                                title: 'Logo de la Marca',
+                                aspectRatioRef: '400x160px'
+                              })}
+                              className="flex items-center justify-center gap-1.5 px-4 py-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 hover:border-accent/30 transition-all text-xs text-white/80 font-bold h-[50px] whitespace-nowrap cursor-pointer"
+                            >
+                              <Upload size={14} className="text-accent" />
+                              <span>Subir Imagen</span>
+                            </button>
+                          </div>
+                          
+                          {brandData.logoUrl && (
+                            <div className="mt-3 p-3 bg-white/5 rounded-xl border border-white/5 flex items-center gap-4">
+                              <div className="relative w-16 h-10 bg-black/60 rounded-lg overflow-hidden border border-white/10 flex items-center justify-center p-1">
+                                <img src={brandData.logoUrl} alt="Logo" className="max-w-full max-h-full object-contain" referrerPolicy="no-referrer" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-black text-accent uppercase tracking-wider">Logo Cargado</p>
+                                <p className="text-[9px] text-white/40 truncate">{brandData.logoUrl}</p>
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  updateBrand('logoUrl', '');
+                                  if (supabaseStatus.connected) saveSettings('brand', { ...brandData, logoUrl: '' });
+                                }}
+                                className="text-[10px] text-red-400 hover:text-red-300 font-bold px-2 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-all"
+                              >
+                                Quitar
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </motion.div>
@@ -1025,12 +1319,54 @@ export default function App() {
                             <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">URL del Banner</label>
                             <span className="text-[8px] text-white/20 font-bold py-0.5 px-2 bg-white/5 rounded border border-white/5">Ref: 1200x800px</span>
                           </div>
-                          <input 
-                            type="text" 
-                            value={eventData.bannerImage}
-                            onChange={(e) => updateField('bannerImage', e.target.value)}
-                            className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
-                          />
+                          <div className="flex gap-2 items-center">
+                            <input 
+                              type="text" 
+                              value={eventData.bannerImage}
+                              onChange={(e) => updateField('bannerImage', e.target.value)}
+                              className="flex-1 bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                            />
+                            <button 
+                              type="button"
+                              onClick={() => setActiveUploadModal({
+                                fieldKey: 'bannerImage',
+                                onUploadSuccess: (url) => updateField('bannerImage', url),
+                                title: 'Banner del Evento',
+                                aspectRatioRef: '1200x800px'
+                              })}
+                              className="flex items-center justify-center gap-1.5 px-3.5 py-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-accent/40 transition-all text-xs text-white/80 font-bold h-[42px] whitespace-nowrap cursor-pointer"
+                            >
+                              <Upload size={14} className="text-accent" />
+                              <span>Subir Imagen</span>
+                            </button>
+                          </div>
+                          
+                          {eventData.bannerImage && (
+                            <div className="mt-2 p-2 bg-white/5 rounded-xl border border-white/5 flex items-center gap-3">
+                              <div className="relative aspect-[16/10] w-14 bg-black/60 rounded overflow-hidden border border-white/10 flex items-center justify-center">
+                                <img src={eventData.bannerImage} alt="Banner" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-black text-accent uppercase tracking-wider">Banner Cargado</p>
+                                <p className="text-[9px] text-white/40 truncate">{eventData.bannerImage}</p>
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  updateField('bannerImage', '');
+                                  if (supabaseStatus.connected) {
+                                    const currentEvent = events.find(ev => ev.id === currentEventId);
+                                    if (currentEvent) {
+                                      saveEvent(currentEventId, { ...currentEvent, bannerImage: '' });
+                                    }
+                                  }
+                                }}
+                                className="text-[9px] text-red-400 hover:text-red-300 font-bold px-1.5 py-1 bg-red-500/10 hover:bg-red-500/20 rounded transition-all"
+                              >
+                                Quitar
+                              </button>
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-col gap-2">
                           <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Etiqueta</label>
@@ -1060,16 +1396,7 @@ export default function App() {
                             placeholder="Ej: 24 MAY 2026"
                           />
                         </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Video Promo (URL MP4)</label>
-                          <input 
-                            type="text" 
-                            value={eventData.videoUrl || ""}
-                            onChange={(e) => updateField('videoUrl', e.target.value)}
-                            className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
-                            placeholder="https://itstore.pe/video/BALI_VIDEO.mp4"
-                          />
-                        </div>
+
                         <div className="flex flex-col gap-2">
                           <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">Categoría</label>
                           <input 
@@ -1086,6 +1413,16 @@ export default function App() {
                             value={eventData.price}
                             onChange={(e) => setEvents(prev => prev.map(ev => ev.id === currentEventId ? { ...ev, price: parseFloat(e.target.value) || 0 } : ev))}
                             className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold ml-1">WhatsApp de Ventas (Ej: 51999000111)</label>
+                          <input 
+                            type="text" 
+                            value={eventData.whatsappNumber || ""}
+                            onChange={(e) => updateField('whatsappNumber', e.target.value)}
+                            className="bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-xs focus:border-accent outline-none transition-all"
+                            placeholder="Ej: 51999000111"
                           />
                         </div>
                         <div className="flex flex-col gap-2 md:col-span-2">
@@ -1133,40 +1470,41 @@ export default function App() {
                       className="space-y-6"
                     >
                       <div className="flex items-center gap-2 mb-4">
-                        <div className="w-1.5 h-4 bg-[#742284] rounded-full" />
-                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Configuración de Pagos</span>
+                        <div className="w-1.5 h-4 bg-[#25D366] rounded-full" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Configuración de Pedidos por WhatsApp</span>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="group">
-                          <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-[#742284] transition-colors">Número Yape</label>
-                          <input 
-                            type="text" 
-                            value={yapeData.number}
-                            onChange={(e) => updateYape('number', e.target.value)}
-                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-[#742284]/40 outline-none transition-all"
-                          />
-                        </div>
-                        <div className="group">
-                          <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-[#742284] transition-colors">Titular de Cuenta</label>
-                          <input 
-                            type="text" 
-                            value={yapeData.holder}
-                            onChange={(e) => updateYape('holder', e.target.value)}
-                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-[#742284]/40 outline-none transition-all"
-                          />
-                        </div>
-                        <div className="group md:col-span-2">
-                          <div className="flex justify-between items-center ml-1 mb-2">
-                            <label className="text-[9px] text-white/30 uppercase font-bold group-focus-within:text-[#742284] transition-colors">URL Imagen QR</label>
-                            <span className="text-[8px] text-white/20 font-bold py-0.5 px-2 bg-white/5 rounded border border-white/5">Ref: 500x500px (1:1)</span>
+                      <div className="p-6 bg-white/[0.02] border border-white/5 rounded-2xl space-y-4">
+                        <div className="flex items-start gap-4">
+                          <div className="p-3 bg-[#25D366]/10 rounded-xl text-[#25D366] shrink-0">
+                            <MessageSquare size={24} />
                           </div>
-                          <input 
-                            type="text" 
-                            value={yapeData.qrUrl}
-                            onChange={(e) => updateYape('qrUrl', e.target.value)}
-                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-[#742284]/40 outline-none transition-all"
-                          />
+                          <div>
+                            <h4 className="text-sm font-bold text-white mb-1">Redirección Automática a WhatsApp</h4>
+                            <p className="text-xs text-white/40 leading-relaxed">
+                              Al desactivar las pasarelas tradicionales, los clientes completarán su reserva y serán redirigidos automáticamente a este número de WhatsApp con un mensaje pre-formateado que incluye los detalles del evento, las entradas seleccionadas y el total a pagar.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="h-[1px] bg-white/5 my-2" />
+
+                        <div className="grid grid-cols-1 gap-6">
+                          <div className="group">
+                            <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-[#25D366] transition-colors">
+                              Número de WhatsApp de Ventas (Con código de país, ej: 51999000111)
+                            </label>
+                            <input 
+                              type="text" 
+                              value={yapeData.whatsappNumber || ""}
+                              onChange={(e) => updateYape('whatsappNumber', e.target.value)}
+                              className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-[#25D366]/40 outline-none transition-all"
+                              placeholder="Ej: 51999000111"
+                            />
+                            <p className="text-[9px] text-white/20 mt-1.5 ml-1">
+                              * Asegúrate de incluir el código de país sin espacios ni símbolos (Ej: "51" para Perú + tu número celular de 9 dígitos).
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </motion.div>
@@ -1426,13 +1764,50 @@ export default function App() {
                               <label className="text-[9px] text-white/30 uppercase font-bold group-focus-within:text-accent transition-colors">Imagen Compartir (OG Image URL)</label>
                               <span className="text-[8px] text-white/20 font-bold py-0.5 px-2 bg-white/5 rounded border border-white/5">Ref: 1200x630px</span>
                             </div>
-                            <input 
-                              type="text" 
-                              value={seoData.ogImage}
-                              onChange={(e) => updateSeo('ogImage', e.target.value)}
-                              className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all"
-                              placeholder="URL de la imagen para redes sociales"
-                            />
+                            <div className="flex gap-2 items-center">
+                              <input 
+                                type="text" 
+                                value={seoData.ogImage}
+                                onChange={(e) => updateSeo('ogImage', e.target.value)}
+                                className="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all placeholder:text-white/10"
+                                placeholder="URL de la imagen para redes sociales"
+                              />
+                            <button 
+                              type="button"
+                              onClick={() => setActiveUploadModal({
+                                fieldKey: 'ogImage',
+                                onUploadSuccess: (url) => updateSeo('ogImage', url),
+                                title: 'Imagen Compartir (SEO)',
+                                aspectRatioRef: '1200x630px'
+                              })}
+                              className="flex items-center justify-center gap-1.5 px-4 py-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 hover:border-accent/30 transition-all text-xs text-white/80 font-bold h-[50px] whitespace-nowrap cursor-pointer"
+                            >
+                              <Upload size={14} className="text-accent" />
+                              <span>Subir Imagen</span>
+                            </button>
+                            </div>
+                            
+                            {seoData.ogImage && (
+                              <div className="mt-3 p-3 bg-white/5 rounded-xl border border-white/5 flex items-center gap-4">
+                                <div className="relative aspect-[120/63] w-20 bg-black/60 rounded-lg overflow-hidden border border-white/10 flex items-center justify-center">
+                                  <img src={seoData.ogImage} alt="OG Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[10px] font-black text-accent uppercase tracking-wider">OG Imagen Cargada</p>
+                                  <p className="text-[9px] text-white/40 truncate">{seoData.ogImage}</p>
+                                </div>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    updateSeo('ogImage', '');
+                                    if (supabaseStatus.connected) saveSettings('seo', { ...seoData, ogImage: '' });
+                                  }}
+                                  className="text-[10px] text-red-400 hover:text-red-300 font-bold px-2 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-all"
+                                >
+                                  Quitar
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -1446,6 +1821,85 @@ export default function App() {
                             <div className="text-[#34a853] text-[13px]">{window.location.origin}</div>
                             <div className="text-white/60 text-[13px] line-clamp-2">{seoData.description}</div>
                           </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {adminTab === 'cloudinary' && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-1.5 h-4 bg-accent rounded-full" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Configuración de Cloudinary</span>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <p className="text-[11px] text-white/60 leading-relaxed max-w-xl">
+                          Configura tu cuenta de <a href="https://cloudinary.com" target="_blank" rel="noreferrer" className="text-accent underline">Cloudinary</a> para poder subir imágenes (Banners, Logos y QRs) directamente desde tu computadora en lugar de pegar URLs manuales.
+                        </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                          <div className="group">
+                            <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-accent transition-colors">Cloud Name</label>
+                            <input 
+                              type="text" 
+                              value={cloudinaryData.cloudName}
+                              onChange={(e) => {
+                                setCloudinaryData(prev => ({ ...prev, cloudName: e.target.value }));
+                                setHasUnsavedChanges(true);
+                              }}
+                              className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all"
+                              placeholder="Ej: dxg8bpxxx"
+                            />
+                          </div>
+
+                          <div className="group">
+                            <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-accent transition-colors">API Key (Opcional)</label>
+                            <input 
+                              type="text" 
+                              value={cloudinaryData.apiKey || ""}
+                              onChange={(e) => {
+                                setCloudinaryData(prev => ({ ...prev, apiKey: e.target.value }));
+                                setHasUnsavedChanges(true);
+                              }}
+                              className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all"
+                              placeholder="Ej: 832948293489248"
+                            />
+                          </div>
+
+                          <div className="group">
+                            <label className="text-[9px] text-white/30 uppercase font-bold ml-1 mb-2 block group-focus-within:text-accent transition-colors">Upload Preset (No Firmado)</label>
+                            <input 
+                              type="text" 
+                              value={cloudinaryData.uploadPreset}
+                              onChange={(e) => {
+                                setCloudinaryData(prev => ({ ...prev, uploadPreset: e.target.value }));
+                                setHasUnsavedChanges(true);
+                              }}
+                              className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs text-white focus:border-accent/40 outline-none transition-all"
+                              placeholder="Ej: preset_unsigned"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="p-5 bg-white/5 rounded-2xl border border-white/5 space-y-3">
+                          <h4 className="text-[10px] font-bold text-accent uppercase tracking-widest flex items-center gap-2">
+                             ¿Cómo configurar tu preset en Cloudinary?
+                          </h4>
+                          <ol className="text-[11px] text-white/60 list-decimal list-inside space-y-1 ml-1">
+                            <li>Inicia sesión en tu consola de <a href="https://cloudinary.com" target="_blank" rel="noreferrer" className="text-accent underline">Cloudinary</a>.</li>
+                            <li>Haz clic en el icono de <strong>Ajustes / Configuración</strong> (el engranaje abajo a la izquierda).</li>
+                            <li>Selecciona la pestaña <strong>Upload</strong> en la barra lateral.</li>
+                            <li>Desplázate hacia abajo hasta la sección <strong>Upload presets</strong>.</li>
+                            <li>Haz clic en <strong>Add upload preset</strong>.</li>
+                            <li>Cambia el <strong>Signing Mode</strong> de <i>Signed</i> a <strong>Unsigned</strong> (¡Muy importante!).</li>
+                            <li>Guarda los cambios y copia el nombre que se asignó al preset (o asígnale uno tú mismo).</li>
+                            <li>Pega tu <strong>Cloud Name</strong> (que aparece en tu Dashboard principal) y el nombre del preset arriba.</li>
+                          </ol>
                         </div>
                       </div>
                     </motion.div>
@@ -1516,49 +1970,7 @@ export default function App() {
             </div>
 
             <div className="relative z-10 h-full flex flex-col justify-end">
-              {eventData.videoUrl && (
-                <motion.div 
-                  key={eventData.videoUrl} // Forzar re-render al cambiar de video
-                  initial={{ opacity: 0, scale: 0.8, x: 20 }}
-                  animate={{ opacity: 1, scale: 1, x: 0 }}
-                  className="absolute top-4 right-4 w-[130px] md:w-[180px] aspect-[9/16] rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border-2 border-white/20 z-50 bg-black cursor-pointer group"
-                  onClick={(e) => {
-                    setIsVideoMuted(prev => !prev);
-                  }}
-                >
-                  <video 
-                    src={eventData.videoUrl}
-                    autoPlay
-                    muted={isVideoMuted}
-                    loop
-                    playsInline
-                    preload="auto"
-                    className="w-full h-full object-cover"
-                    onLoadedMetadata={(e) => {
-                      // Attempt to play with audio
-                      e.currentTarget.play().catch(() => {
-                        // If blocked, we might need to stay muted until first interaction
-                        // But we keep the state as unmuted so when they click it works
-                        console.log("Autoplay with audio blocked by browser");
-                      });
-                    }}
-                  />
-                  <div className="absolute bottom-2 right-2 p-1.5 bg-black/60 backdrop-blur-sm rounded-full transition-all group-hover:scale-110">
-                    {isVideoMuted ? (
-                      <VolumeX size={12} className="text-white" />
-                    ) : (
-                      <Volume2 size={12} className="text-white text-accent" />
-                    )}
-                  </div>
-                  {isVideoMuted && (
-                    <div className="absolute inset-x-0 bottom-8 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="bg-black/40 backdrop-blur-md text-[8px] uppercase font-bold text-white px-2 py-1 rounded-full">
-                        Clic para audio
-                      </span>
-                    </div>
-                  )}
-                </motion.div>
-              )}
+
 
               {isAdminMode && (
                 <motion.div 
@@ -1842,55 +2254,54 @@ export default function App() {
                     <X size={18} />
                   </button>
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-accent/20 rounded-xl text-accent">
-                      <Wallet size={20} />
+                    <div className="p-2.5 bg-[#25D366]/20 rounded-xl text-[#25D366]">
+                      <MessageSquare size={20} />
                     </div>
                     <div>
-                      <h3 className="text-xl font-black tracking-tight text-white">Método de Pago</h3>
-                      <p className="text-[9px] text-white/40 uppercase tracking-[0.15em] font-black">Selecciona cómo deseas pagar</p>
+                      <h3 className="text-xl font-black tracking-tight text-white">Comprar por WhatsApp</h3>
+                      <p className="text-[9px] text-[#25D366] uppercase tracking-[0.15em] font-black">Finaliza tu orden de inmediato</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Body */}
                 <div className="p-5">
-                  {/* Customer Info Form */}
+                  {/* Evento Seleccionado */}
                   <div className="mb-5 space-y-3">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-1 h-3 bg-accent rounded-full" />
-                      <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.15em]">Tus Datos de Contacto</span>
+                      <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.15em]">Evento Seleccionado</span>
                     </div>
-                    <div className="grid grid-cols-1 gap-3">
-                      <div className="space-y-1 flex flex-col">
-                        <label className="text-[8px] uppercase tracking-widest font-black text-white/30 ml-1">Nombre Completo</label>
-                        <input 
-                          type="text" 
-                          value={customerData.name}
-                          onChange={(e) => setCustomerData(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="Tu nombre completo"
-                          className="w-full bg-white/[0.03] border border-white/5 rounded-lg py-2.5 px-3.5 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1 flex flex-col">
-                          <label className="text-[8px] uppercase tracking-widest font-black text-white/30 ml-1">Email</label>
-                          <input 
-                            type="email" 
-                            value={customerData.email}
-                            onChange={(e) => setCustomerData(prev => ({ ...prev, email: e.target.value }))}
-                            placeholder="tu@email.com"
-                            className="w-full bg-white/[0.03] border border-white/5 rounded-lg py-2.5 px-3.5 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
+                    
+                    <div className="relative rounded-2xl overflow-hidden border border-white/5 bg-white/[0.02] flex gap-4 p-3">
+                      {eventData.bannerImage && (
+                        <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-neutral-900 border border-white/5">
+                          <img 
+                            src={eventData.bannerImage} 
+                            alt={`${eventData.title1} ${eventData.title2}`} 
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
                           />
                         </div>
-                        <div className="space-y-1 flex flex-col">
-                          <label className="text-[8px] uppercase tracking-widest font-black text-white/30 ml-1">WhatsApp</label>
-                          <input 
-                            type="tel" 
-                            value={customerData.whatsapp}
-                            onChange={(e) => setCustomerData(prev => ({ ...prev, whatsapp: e.target.value }))}
-                            placeholder="+51 9..."
-                            className="w-full bg-white/[0.03] border border-white/5 rounded-lg py-2.5 px-3.5 text-xs text-white outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
-                          />
+                      )}
+                      <div className="flex flex-col justify-center min-w-0">
+                        {eventData.badge && (
+                          <span className="text-[7px] font-black text-accent tracking-[0.2em] uppercase mb-1">
+                            {eventData.badge}
+                          </span>
+                        )}
+                        <h4 className="text-sm font-black text-white truncate">
+                          {eventData.title1} <span className="font-serif italic text-white/80 font-normal">{eventData.title2}</span>
+                        </h4>
+                        
+                        <div className="flex items-center gap-1.5 mt-2 text-[10px] text-white/50">
+                          <Calendar size={11} className="text-accent shrink-0" />
+                          <span className="truncate">{eventData.dateTime || eventData.date}</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-white/50">
+                          <MapPin size={11} className="text-accent shrink-0" />
+                          <span className="truncate">{eventData.venue}</span>
                         </div>
                       </div>
                     </div>
@@ -1898,122 +2309,52 @@ export default function App() {
 
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-1 h-3 bg-accent rounded-full" />
-                    <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.15em]">Selecciona Método de Pago</span>
+                    <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.15em]">Resumen de Entradas</span>
                   </div>
 
-                  {/* Selector */}
-                  <div className="flex gap-3 mb-5">
-                    <button 
-                      onClick={() => setPaymentMethod('card')}
-                      className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
-                        paymentMethod === 'card' 
-                        ? 'bg-accent/10 border-accent text-accent' 
-                        : 'bg-white/5 border-white/10 text-white/40'
-                      }`}
-                    >
-                      <CreditCard size={20} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Tarjeta</span>
-                    </button>
-                    <button 
-                      onClick={() => setPaymentMethod('yape')}
-                      className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
-                        paymentMethod === 'yape' 
-                        ? 'bg-[#742284]/10 border-[#742284] text-[#742284]' 
-                        : 'bg-white/5 border-white/10 text-white/40'
-                      }`}
-                    >
-                      <div className="w-5 h-5 rounded-md bg-[#742284] flex items-center justify-center text-white font-black text-[8px]">Y</div>
-                      <span className="text-[10px] font-black uppercase tracking-widest">Yape</span>
-                    </button>
-                  </div>
-
-                  {paymentMethod === 'card' ? (
-                    <motion.div 
-                      key="card-form"
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="space-y-3"
-                    >
-                      <div className="space-y-1.5">
-                        <label className="text-[9px] uppercase tracking-widest font-bold opacity-40 ml-1">Número de Tarjeta</label>
-                        <div className="relative">
-                          <CreditCard className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/20" size={14} />
-                          <input 
-                            type="text" 
-                            className="w-full bg-black/40 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-xs outline-none focus:border-accent transition-all"
-                            placeholder="0000 0000 0000 0000"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] uppercase tracking-widest font-bold opacity-40 ml-1">Vencimiento</label>
-                          <input 
-                            type="text" 
-                            className="w-full bg-black/40 border border-white/10 rounded-lg py-3 px-4 text-xs outline-none focus:border-accent transition-all"
-                            placeholder="MM/YY"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] uppercase tracking-widest font-bold opacity-40 ml-1">CVV</label>
-                          <input 
-                            type="text" 
-                            className="w-full bg-black/40 border border-white/10 rounded-lg py-3 px-4 text-xs outline-none focus:border-accent transition-all"
-                            placeholder="***"
-                          />
-                        </div>
-                      </div>
-                      <button 
-                        onClick={handlePurchase}
-                        className="w-full bg-accent text-black py-3.5 rounded-lg font-black text-[11px] uppercase tracking-[0.15em] mt-1 shadow-[0_10px_20px_rgba(212,175,55,0.2)] hover:scale-[1.01] active:scale-[0.99] transition-all"
-                      >
-                        Continuar Pago • S/ {totalPrice.toFixed(2)}
-                      </button>
-                    </motion.div>
-                  ) : (
-                    <motion.div 
-                      key="yape-form"
-                      initial={{ opacity: 0, x: 10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="text-center space-y-4 bg-white/[0.02] p-5 rounded-[20px] border border-white/5"
-                    >
-                      <div className="w-32 h-32 bg-white rounded-2xl mx-auto p-2.5 flex items-center justify-center overflow-hidden">
-                        {yapeData.qrUrl ? (
-                          <img 
-                            src={yapeData.qrUrl} 
-                            alt="Yape QR" 
-                            className="w-full h-full object-contain"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          /* Placeholder QR */
-                          <div className="w-full h-full border-4 border-dashed border-black/10 rounded-xl flex flex-col items-center justify-center text-black/20 gap-1">
-                            <div className="text-2xl text-[#742284] font-black">QR</div>
-                            <p className="text-[7px] font-black uppercase tracking-tighter text-[#742284]">Escanea</p>
+                  {/* Elegant Tickets Summary */}
+                  <div className="bg-white/[0.02] border border-white/5 p-4 rounded-xl space-y-2 mb-6">
+                    {Object.entries(ticketQuantities)
+                      .filter(([_, qty]) => (qty as number) > 0)
+                      .map(([id, qty]) => {
+                        const ticket = ticketTypes.find(t => t.id === id);
+                        return (
+                          <div key={id} className="flex justify-between items-center text-xs">
+                            <span className="text-white/60">
+                              <span className="font-bold text-accent">{qty as number}x</span> {ticket?.name}
+                            </span>
+                            <span className="text-white font-medium">
+                              S/ {((ticket?.price || 0) * (qty as number)).toFixed(2)}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[10px] text-white/50">O envía el pago al número:</p>
-                        <p className="text-xl font-black text-white tracking-widest">{yapeData.number}</p>
-                        <p className="text-[9px] text-accent font-bold uppercase tracking-widest">Titular: {yapeData.holder}</p>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          handlePurchase();
-                        }}
-                        className="w-full bg-[#742284] text-white py-3.5 rounded-lg font-black text-[10px] uppercase tracking-[0.15em] mt-1 hover:bg-[#8e29a1] transition-all"
-                      >
-                        Ya yapeé • S/ {totalPrice.toFixed(2)}
-                      </button>
-                    </motion.div>
-                  )}
+                        );
+                      })}
+                    <div className="h-[1px] bg-white/5 my-2" />
+                    <div className="flex justify-between items-center text-sm font-bold">
+                      <span className="text-white/80">Total a pagar</span>
+                      <span className="text-accent text-lg">S/ {totalPrice.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* Checkout Button */}
+                  <button 
+                    onClick={handleWhatsAppPurchase}
+                    className="w-full bg-[#25D366] text-black hover:bg-[#20ba5a] py-4 rounded-xl font-black text-[11px] uppercase tracking-[0.15em] hover:shadow-[0_10px_30px_rgba(37,211,102,0.3)] transition-all flex items-center justify-center gap-2"
+                  >
+                    <MessageSquare size={16} />
+                    Comprar por WhatsApp
+                  </button>
                 </div>
 
                 {/* Footer Info */}
-                <div className="p-5 pt-0 flex items-center justify-center gap-2 opacity-30">
-                  <Check size={12} />
-                  <span className="text-[8px] uppercase font-bold tracking-[0.15em]">Pago 100% seguro y encriptado</span>
+                <div className="p-5 pt-0 flex flex-col items-center gap-1 opacity-40 text-center">
+                  <div className="flex items-center gap-1.5 justify-center">
+                    <Check size={12} className="text-[#25D366]" />
+                    <span className="text-[8px] uppercase font-bold tracking-[0.15em]">Registro automático y redirección</span>
+                  </div>
+                  <p className="text-[7px] text-white/50 uppercase max-w-xs leading-normal">
+                    Se creará un pedido en el sistema para que el administrador pueda validar tus entradas cuando confirmes el pago en WhatsApp.
+                  </p>
                 </div>
               </motion.div>
             </div>
@@ -2131,13 +2472,36 @@ export default function App() {
       </main>
 
       <footer className="border-t border-white/5 py-10 px-10">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-[10px] uppercase tracking-[0.2em] text-white/20">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-[10px] uppercase tracking-[0.2em] text-white/20 mb-6">
           <span>&copy; 2026 BALI PREMIUM. ALL RIGHTS RESERVED.</span>
           <div className="flex gap-8 mt-4 md:mt-0">
             <a href="#" className="hover:text-white">Privacy</a>
             <a href="#" className="hover:text-white">Terms</a>
             <a href="#" className="hover:text-white">Support</a>
           </div>
+        </div>
+
+        {/* Supabase Diagnostic Section */}
+        <div className="max-w-7xl mx-auto pt-6 border-t border-white/[0.03] flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-2 h-2 rounded-full ${supabaseStatus.connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+              Estado de Base de Datos Supabase: {supabaseStatus.connected ? 'Conectado Correctamente' : 'Desconectado'}
+            </span>
+            {supabaseStatus.error && (
+              <span className="text-[9px] text-red-400 lowercase italic max-w-xs truncate">
+                ({supabaseStatus.error})
+              </span>
+            )}
+          </div>
+          <button 
+            onClick={testSupabaseConnection}
+            disabled={isTestingConnection}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-accent hover:bg-white/10 hover:border-accent/30 active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+          >
+            <RefreshCw size={11} className={isTestingConnection ? "animate-spin" : ""} />
+            <span>{isTestingConnection ? "Probando..." : "Probar Conexión con Supabase"}</span>
+          </button>
         </div>
       </footer>
 
@@ -2167,6 +2531,20 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Upload Modal */}
+      <UploadModal
+        isOpen={activeUploadModal !== null}
+        onClose={() => setActiveUploadModal(null)}
+        title={activeUploadModal?.title || ""}
+        aspectRatioRef={activeUploadModal?.aspectRatioRef}
+        cloudinaryData={cloudinaryData}
+        onUploadSuccess={(url) => {
+          if (activeUploadModal) {
+            activeUploadModal.onUploadSuccess(url);
+            saveUploadedImageToDatabase(url, activeUploadModal.fieldKey);
+          }
+        }}
+      />
     </div>
   );
 }
