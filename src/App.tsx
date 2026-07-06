@@ -2565,36 +2565,13 @@ _Por favor, confírmame la disponibilidad de las entradas para proceder con el p
       </main>
 
       <footer className="border-t border-white/5 py-10 px-10">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-[10px] uppercase tracking-[0.2em] text-white/20 mb-6">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-[10px] uppercase tracking-[0.2em] text-white/20">
           <span>&copy; 2026 BALI PREMIUM. ALL RIGHTS RESERVED.</span>
           <div className="flex gap-8 mt-4 md:mt-0">
             <a href="#" className="hover:text-white">Privacy</a>
             <a href="#" className="hover:text-white">Terms</a>
             <a href="#" className="hover:text-white">Support</a>
           </div>
-        </div>
-
-        {/* Supabase Diagnostic Section */}
-        <div className="max-w-7xl mx-auto pt-6 border-t border-white/[0.03] flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className={`w-2 h-2 rounded-full ${supabaseStatus.connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-            <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
-              Estado de Base de Datos Supabase: {supabaseStatus.connected ? 'Conectado Correctamente' : 'Desconectado'}
-            </span>
-            {supabaseStatus.error && (
-              <span className="text-[9px] text-red-400 lowercase italic max-w-xs truncate">
-                ({supabaseStatus.error})
-              </span>
-            )}
-          </div>
-          <button 
-            onClick={testSupabaseConnection}
-            disabled={isTestingConnection}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-accent hover:bg-white/10 hover:border-accent/30 active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
-          >
-            <RefreshCw size={11} className={isTestingConnection ? "animate-spin" : ""} />
-            <span>{isTestingConnection ? "Probando..." : "Probar Conexión con Supabase"}</span>
-          </button>
         </div>
       </footer>
 
