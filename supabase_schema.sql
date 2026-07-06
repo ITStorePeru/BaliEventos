@@ -43,8 +43,17 @@ CREATE TABLE IF NOT EXISTS ticket_types (
   name TEXT NOT NULL,
   description TEXT,
   price NUMERIC NOT NULL DEFAULT 0,
+  display_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Asegurar que la columna display_order exista si la tabla fue creada previamente
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ticket_types' AND column_name='display_order') THEN
+        ALTER TABLE ticket_types ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0;
+    END IF;
+END $$;
 
 -- 3. Tabla de Configuración (Brand, Yape, SEO)
 CREATE TABLE IF NOT EXISTS site_settings (

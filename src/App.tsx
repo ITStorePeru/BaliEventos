@@ -36,7 +36,10 @@ import {
   Upload,
   MessageSquare,
   Phone,
-  RefreshCw
+  RefreshCw,
+  GripVertical,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 
 // Recipes and Design from SKILL.md
@@ -122,6 +125,7 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   
   // Events Management State
   const [events, setEvents] = useState(INITIAL_EVENTS);
@@ -339,8 +343,9 @@ export default function App() {
       } else if (ticketsRes.data && ticketsRes.data.length > 0) {
         const formattedTickets = ticketsRes.data.map(t => ({
           ...t,
-          desc: t.description || ''
-        }));
+          desc: t.description || '',
+          display_order: typeof t.display_order === 'number' ? t.display_order : 999
+        })).sort((a, b) => a.display_order - b.display_order);
         setTicketTypes(formattedTickets);
         // Initialize quantities
         const initialQtys: Record<string, number> = {};
@@ -599,11 +604,12 @@ export default function App() {
       }
 
       // 3. Save ticket types
-      const ticketUpdates = ticketTypes.map(t => ({
+      const ticketUpdates = ticketTypes.map((t, index) => ({
         id: t.id,
         name: t.name,
         description: (t as any).desc || t.description,
-        price: t.price
+        price: t.price,
+        display_order: index
       }));
 
       const { error: ticketsError } = await supabase
@@ -744,6 +750,57 @@ export default function App() {
     // Si el campo es 'name', forzamos mayúsculas
     const finalValue = field === 'name' && typeof value === 'string' ? value.toUpperCase() : value;
     setTicketTypes(prev => prev.map(t => t.id === id ? { ...t, [field]: finalValue } : t));
+    setHasUnsavedChanges(true);
+  };
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", index.toString());
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+
+    const reorderedTickets = [...ticketTypes];
+    const draggedItem = reorderedTickets[draggedIndex];
+    reorderedTickets.splice(draggedIndex, 1);
+    reorderedTickets.splice(index, 0, draggedItem);
+    
+    // Assign new indices as display_order
+    const updatedTickets = reorderedTickets.map((t, idx) => ({
+      ...t,
+      display_order: idx
+    }));
+    
+    setTicketTypes(updatedTickets);
+    setDraggedIndex(index);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+  };
+
+  const moveTicketType = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= ticketTypes.length) return;
+
+    const updated = [...ticketTypes];
+    const temp = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = temp;
+
+    // Re-assign display_order
+    const updatedWithOrder = updated.map((t, idx) => ({
+      ...t,
+      display_order: idx
+    }));
+
+    setTicketTypes(updatedWithOrder);
     setHasUnsavedChanges(true);
   };
 
@@ -1531,12 +1588,27 @@ _Por favor, confírmame la disponibilidad de las entradas para proceder con el p
                       </div>
                       
                       <div className="space-y-4">
-                        {ticketTypes.map((ticket) => (
+                        {ticketTypes.map((ticket, index) => (
                           <motion.div 
                             key={ticket.id} 
+                            draggable="true"
+                            onDragStart={(e) => handleDragStart(e, index)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDragEnd={handleDragEnd}
                             whileHover={{ scale: 1.01, backgroundColor: "rgba(255, 255, 255, 0.08)" }}
-                            className="grid grid-cols-1 md:grid-cols-[1fr_2fr_120px_40px] gap-4 bg-white/5 p-4 rounded-2xl border border-white/10 items-center transition-colors group"
+                            className={`grid grid-cols-1 md:grid-cols-[auto_1fr_2fr_120px_auto_40px] gap-4 bg-white/5 p-4 rounded-2xl border items-center transition-all group ${
+                              draggedIndex === index ? 'border-accent border-dashed opacity-50 bg-accent/5' : 'border-white/10'
+                            }`}
                           >
+                            {/* Control de arrastre */}
+                            <div 
+                              className="flex items-center gap-2 cursor-grab active:cursor-grabbing p-1.5 text-white/30 hover:text-accent transition-colors"
+                              title="Arrastrar para reordenar"
+                            >
+                              <GripVertical size={16} />
+                              <span className="text-[10px] font-black opacity-40">{index + 1}</span>
+                            </div>
+
                             <input 
                               type="text" 
                               value={ticket.name}
@@ -1558,6 +1630,27 @@ _Por favor, confírmame la disponibilidad de las entradas para proceder con el p
                                 className="w-full bg-transparent text-[11px] font-bold text-white outline-none py-2"
                               />
                             </div>
+
+                            {/* Botones de desplazar orden */}
+                            <div className="flex items-center gap-1 bg-black/10 p-1 rounded-xl border border-white/5">
+                              <button
+                                onClick={() => moveTicketType(index, 'up')}
+                                disabled={index === 0}
+                                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-accent transition-all disabled:opacity-10 disabled:pointer-events-none"
+                                title="Desplazar arriba"
+                              >
+                                <ArrowUp size={12} />
+                              </button>
+                              <button
+                                onClick={() => moveTicketType(index, 'down')}
+                                disabled={index === ticketTypes.length - 1}
+                                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-accent transition-all disabled:opacity-10 disabled:pointer-events-none"
+                                title="Desplazar abajo"
+                              >
+                                <ArrowDown size={12} />
+                              </button>
+                            </div>
+
                             <button 
                               onClick={() => handleDeleteTicketType(ticket.id)}
                               className="p-2.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
